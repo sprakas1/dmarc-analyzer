@@ -13,4 +13,4 @@ if __name__ == "__main__":
     start_background_scheduler()
     
     # Start the FastAPI application
-    uvicorn.run(app, host="0.0.0.0", port=8001) 
+    uvicorn.run(app, host="0.0.0.0", port=8000) 
