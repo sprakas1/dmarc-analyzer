@@ -1,5 +1,7 @@
 # DMARC Analyzer
 
+[![Deploy to DigitalOcean](https://github.com/sprakas1/dmarc-analyzer/actions/workflows/deploy.yml/badge.svg)](https://github.com/sprakas1/dmarc-analyzer/actions/workflows/deploy.yml)
+
 A comprehensive DMARC report analysis platform that automatically ingests, parses, and visualizes DMARC reports to help organizations monitor email authentication and security.
 
 ## 🚀 Features
@@ -177,4 +179,10 @@ Common issues and solutions:
 
 ## 📄 License
 
-This project is designed for production use with enterprise-grade security and scalability considerations. 
+This project is designed for production use with enterprise-grade security and scalability considerations.
+
+## 🚀 Deployment
+
+This application auto-deploys to DigitalOcean droplet via GitHub Actions on every push to main branch.
+
+**Live Application**: https://dmarc.sharanprakash.me 
