@@ -1,0 +1,52 @@
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
+import ProtectedRoute from '@/components/auth/ProtectedRoute'
+import Dashboard from '@/components/Dashboard'
+import AuthForm from '@/components/auth/AuthForm'
+import { useState } from 'react'
+
+export default function Home() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+
+  // If user is not authenticated, show auth form
+  if (!user && !loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              DMARC Analyzer
+            </h1>
+            <p className="text-lg text-gray-600">
+              Secure email authentication made simple
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+          <AuthForm 
+            mode={authMode} 
+            onToggleMode={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')} 
+          />
+        </div>
+
+        <div className="mt-8 text-center">
+          <p className="text-sm text-gray-500">
+            By using DMARC Analyzer, you agree to our Terms of Service and Privacy Policy.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ProtectedRoute>
+      <Dashboard />
+    </ProtectedRoute>
+  )
+} 
