@@ -3,8 +3,10 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   experimental: {
-    appDir: true
-  }
+    appDir: true,
+    serverComponentsExternalPackages: []
+  },
+  output: 'standalone'
 }
 
 module.exports = nextConfig 

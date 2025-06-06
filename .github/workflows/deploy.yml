@@ -1,0 +1,98 @@
+name: Deploy to DigitalOcean Droplet
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Deploy to DigitalOcean Droplet
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.DROPLET_HOST }}
+        username: ${{ secrets.DROPLET_USER }}
+        key: ${{ secrets.DROPLET_SSH_KEY }}
+        script: |
+          # Navigate to app directory
+          cd /opt/dmarc-analyzer || (sudo mkdir -p /opt/dmarc-analyzer && cd /opt/dmarc-analyzer && sudo chown $USER:$USER /opt/dmarc-analyzer)
+          
+          # Clone or update repository
+          if [ -d ".git" ]; then
+            echo "Updating existing repository..."
+            git pull origin main
+          else
+            echo "Cloning repository..."
+            git clone https://github.com/${{ github.repository }}.git .
+          fi
+          
+          # Setup environment variables for backend
+          cat > backend/.env << 'EOF'
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EOF
+          
+          # Setup environment variables for frontend
+          cat > frontend/.env.local << 'EOF'
+          NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          EOF
+          
+          # Setup backend
+          echo "Setting up backend..."
+          cd backend
+          
+          # Create virtual environment if it doesn't exist
+          if [ ! -d ".venv" ]; then
+            python3 -m venv .venv
+          fi
+          
+          # Activate virtual environment and install dependencies
+          source .venv/bin/activate
+          pip install -r requirements.txt
+          
+          # Stop existing backend process
+          if [ -f ".fastapi.pid" ]; then
+            kill $(cat .fastapi.pid) 2>/dev/null || true
+            rm .fastapi.pid
+          fi
+          
+          # Start backend
+          nohup .venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
+          echo $! > .fastapi.pid
+          
+          cd ..
+          
+          # Setup frontend
+          echo "Setting up frontend..."
+          cd frontend
+          
+          # Install dependencies
+          npm ci
+          
+          # Build the application
+          npm run build
+          
+          # Stop existing frontend process
+          if [ -f ".nextjs.pid" ]; then
+            kill $(cat .nextjs.pid) 2>/dev/null || true
+            rm .nextjs.pid
+          fi
+          
+          # Start frontend
+          nohup npm start > ../frontend.log 2>&1 &
+          echo $! > .nextjs.pid
+          
+          cd ..
+          
+          # Show status
+          echo "Deployment complete!"
+          echo "Backend PID: $(cat backend/.fastapi.pid 2>/dev/null || echo 'Not running')"
+          echo "Frontend PID: $(cat frontend/.nextjs.pid 2>/dev/null || echo 'Not running')"
+          
+          # Check if services are running
+          sleep 3
+          curl -f http://localhost:8000/health 2>/dev/null && echo "✅ Backend is running" || echo "❌ Backend failed to start"
+          curl -f http://localhost:3000 2>/dev/null && echo "✅ Frontend is running" || echo "❌ Frontend failed to start" 
