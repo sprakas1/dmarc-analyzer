@@ -40,7 +40,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           EOF
           
-          # Setup backend
+          # Make start script executable
+          chmod +x start_servers.sh
+          
+          # Stop any existing services
+          ./start_servers.sh stop || true
+          
+          # Setup backend dependencies
           echo "Setting up backend..."
           cd backend
           
@@ -53,19 +59,9 @@ jobs:
           source .venv/bin/activate
           pip install -r requirements.txt
           
-          # Stop existing backend process
-          if [ -f ".fastapi.pid" ]; then
-            kill $(cat .fastapi.pid) 2>/dev/null || true
-            rm .fastapi.pid
-          fi
-          
-          # Start backend
-          nohup .venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 &
-          echo $! > .fastapi.pid
-          
           cd ..
           
-          # Setup frontend
+          # Setup frontend dependencies
           echo "Setting up frontend..."
           cd frontend
           
@@ -75,24 +71,11 @@ jobs:
           # Build the application
           npm run build
           
-          # Stop existing frontend process
-          if [ -f ".nextjs.pid" ]; then
-            kill $(cat .nextjs.pid) 2>/dev/null || true
-            rm .nextjs.pid
-          fi
-          
-          # Start frontend
-          nohup npm start > ../frontend.log 2>&1 &
-          echo $! > .nextjs.pid
-          
           cd ..
+          
+          # Start both services using our proven script
+          ./start_servers.sh start
           
           # Show status
           echo "Deployment complete!"
-          echo "Backend PID: $(cat backend/.fastapi.pid 2>/dev/null || echo 'Not running')"
-          echo "Frontend PID: $(cat frontend/.nextjs.pid 2>/dev/null || echo 'Not running')"
-          
-          # Check if services are running
-          sleep 3
-          curl -f http://localhost:8000/health 2>/dev/null && echo "✅ Backend is running" || echo "❌ Backend failed to start"
-          curl -f http://localhost:3000 2>/dev/null && echo "✅ Frontend is running" || echo "❌ Frontend failed to start" 
+          ./start_servers.sh status 
