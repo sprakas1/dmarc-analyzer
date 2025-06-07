@@ -6,13 +6,14 @@ const nextConfig = {
     serverComponentsExternalPackages: []
   },
   output: 'standalone',
-  // Build optimizations for CI/Docker builds
+  // Build optimizations for CI/Docker builds  
   eslint: {
     ignoreDuringBuilds: true
-  },
-  typescript: {
-    ignoreBuildErrors: true
   }
+  // Temporarily enable TypeScript checks to see detailed errors
+  // typescript: {
+  //   ignoreBuildErrors: true
+  // }
 }
 
 module.exports = nextConfig 
