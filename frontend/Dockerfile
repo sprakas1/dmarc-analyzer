@@ -2,6 +2,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Set Node.js memory limit for low-memory builds
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 # Copy package files first for better caching
 COPY package*.json ./
 
@@ -11,7 +14,7 @@ RUN npm install
 # Copy application code
 COPY . .
 
-# Build the application
+# Build the application with memory constraints
 RUN npm run build
 
 # Create non-root user
