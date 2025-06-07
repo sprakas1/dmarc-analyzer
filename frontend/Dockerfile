@@ -1,9 +1,9 @@
-FROM node:18-alpine
+FROM node:18-slim
 
 WORKDIR /app
 
 # Set Node.js memory limit for low-memory builds
-ENV NODE_OPTIONS="--max-old-space-size=512"
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 
 # Copy package files first for better caching
 COPY package*.json ./
@@ -18,8 +18,8 @@ COPY . .
 RUN npm run build
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
+RUN groupadd -g 1001 nodejs
+RUN useradd -r -u 1001 -g nodejs nextjs
 
 # Change ownership of necessary directories
 RUN chown -R nextjs:nodejs /app
@@ -30,6 +30,6 @@ EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1
+    CMD curl -f http://localhost:3000 || exit 1
 
 CMD ["npm", "start"] 
