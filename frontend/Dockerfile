@@ -9,10 +9,10 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
 
 # Copy package files for better caching
-COPY package*.json ./
+COPY package.json package-lock.json ./
 
-# Use npm ci for reproducible builds
-RUN npm ci
+# Verify files are copied and use npm ci for reproducible builds
+RUN ls -la && npm ci
 
 # Copy application code
 COPY . .
