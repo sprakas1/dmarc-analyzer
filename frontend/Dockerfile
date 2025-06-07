@@ -17,6 +17,11 @@ RUN ls -la && npm ci
 # Copy application code
 COPY . .
 
+# Debug: Show what files are actually present
+RUN echo "=== DEBUG: Files in /app ===" && find . -type f -name "*.ts" -o -name "*.tsx" | head -20
+RUN echo "=== DEBUG: Contents of src/ directory ===" && ls -la src/ || echo "src/ directory not found!"
+RUN echo "=== DEBUG: Contents of src/lib/ directory ===" && ls -la src/lib/ || echo "src/lib/ directory not found!"
+
 # Build the application
 RUN npm run build
 
