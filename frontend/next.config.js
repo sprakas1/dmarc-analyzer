@@ -9,6 +9,11 @@ const nextConfig = {
   // Build optimizations for CI/Docker builds  
   eslint: {
     ignoreDuringBuilds: true
+  },
+  webpack: (config) => {
+    const path = require('path');
+    config.resolve.alias['@'] = path.resolve(__dirname, 'src');
+    return config;
   }
   // Temporarily enable TypeScript checks to see detailed errors
   // typescript: {
