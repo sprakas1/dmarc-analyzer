@@ -28,54 +28,28 @@ jobs:
             git clone https://github.com/${{ github.repository }}.git .
           fi
           
-          # Setup environment variables for backend
-          cat > backend/.env << 'EOF'
+          # Create environment file
+          cat > .env << 'EOF'
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          EOF
-          
-          # Setup environment variables for frontend
-          cat > frontend/.env.local << 'EOF'
           NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           EOF
           
-          # Make start script executable
-          chmod +x start_servers.sh
+          # Stop existing containers
+          docker-compose down || true
           
-          # Stop any existing services
-          ./start_servers.sh stop || true
+          # Pull latest images and rebuild
+          docker-compose build --no-cache
           
-          # Setup backend dependencies
-          echo "Setting up backend..."
-          cd backend
+          # Start services
+          docker-compose up -d
           
-          # Create virtual environment if it doesn't exist
-          if [ ! -d ".venv" ]; then
-            python3 -m venv .venv
-          fi
-          
-          # Activate virtual environment and install dependencies
-          source .venv/bin/activate
-          pip install -r requirements.txt
-          
-          cd ..
-          
-          # Setup frontend dependencies
-          echo "Setting up frontend..."
-          cd frontend
-          
-          # Install dependencies
-          npm ci
-          
-          # Build the application
-          npm run build
-          
-          cd ..
-          
-          # Start both services using our proven script
-          ./start_servers.sh start
+          # Wait for health checks
+          echo "Waiting for services to be healthy..."
+          timeout 120 bash -c 'until docker-compose ps | grep -q "healthy"; do sleep 5; done'
           
           # Show status
           echo "Deployment complete!"
-          ./start_servers.sh status 
+          docker-compose ps
+          docker-compose logs --tail=20 
