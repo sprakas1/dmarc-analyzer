@@ -1,4 +1,5 @@
 import uvicorn
+import os
 from api import app
 from scheduler import start_background_scheduler
 import logging
@@ -12,5 +13,8 @@ if __name__ == "__main__":
     logger.info("Starting DMARC automated scheduler")
     start_background_scheduler()
     
+    # Get port from environment or default to 8001 (matching start_servers.sh)
+    port = int(os.getenv("PORT", 8001))
+    
     # Start the FastAPI application
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=port) 

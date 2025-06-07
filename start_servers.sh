@@ -116,11 +116,18 @@ stop_fastapi() {
         rm -f "$FASTAPI_PID_FILE"
     fi
     
-    # Kill any remaining processes on the port
+    # Kill any remaining processes on the FastAPI port
     local processes=$(lsof -ti :$FASTAPI_PORT 2>/dev/null)
     if [ ! -z "$processes" ]; then
         echo "Killing processes on port $FASTAPI_PORT..."
         echo $processes | xargs kill -9 2>/dev/null || true
+    fi
+    
+    # Also kill any processes on port 8000 (legacy/conflicting processes)
+    local processes_8000=$(lsof -ti :8000 2>/dev/null)
+    if [ ! -z "$processes_8000" ]; then
+        echo "Killing conflicting processes on port 8000..."
+        echo $processes_8000 | xargs kill -9 2>/dev/null || true
     fi
     
     echo -e "${GREEN}✅ FastAPI service stopped${NC}"
@@ -229,6 +236,8 @@ start_fastapi() {
     # Start FastAPI server
     echo "🚀 Starting FastAPI server on port $FASTAPI_PORT..."
     cd backend
+    # Set PORT environment variable for main.py
+    export PORT=$FASTAPI_PORT
     nohup python main.py > ../fastapi.log 2>&1 &
     FASTAPI_PID=$!
     echo $FASTAPI_PID > "../$FASTAPI_PID_FILE"
