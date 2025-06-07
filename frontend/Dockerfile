@@ -1,30 +1,44 @@
-FROM node:18.17.0-slim
+# ---------- builder ----------
+FROM node:18-slim AS builder
 
 WORKDIR /app
 
-# Set Node.js memory limit for low-memory builds
-ENV NODE_OPTIONS="--max-old-space-size=1024"
+# Environment variables for build optimization
+ENV NODE_ENV=production \
+    NODE_OPTIONS="--max-old-space-size=1024" \
+    NEXT_TELEMETRY_DISABLED=1
 
-# Copy package files first for better caching
+# Copy package files for better caching
 COPY package*.json ./
 
-# Install dependencies with npm install (more forgiving than npm ci)
-RUN npm install
+# Use npm ci for reproducible builds
+RUN npm ci
 
 # Copy application code
 COPY . .
 
-# Build the application with memory constraints
+# Build the application
 RUN npm run build
 
-# Create non-root user
-RUN groupadd -g 1001 nodejs
-RUN useradd -r -u 1001 -g nodejs nextjs
+# ---------- runtime ----------
+FROM node:18-slim AS runner
 
-# Change ownership of necessary directories
-RUN chown -R nextjs:nodejs /app
+WORKDIR /app
 
-USER nextjs
+# Environment variables for runtime
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
+
+# Copy package files and install only production dependencies
+COPY --from=builder /app/package*.json ./
+RUN npm ci --omit=dev
+
+# Copy built application from builder stage
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+
+# Use existing node user (uid 1000) instead of creating custom user
+USER node
 
 EXPOSE 3000
 
