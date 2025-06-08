@@ -13,8 +13,8 @@ if __name__ == "__main__":
     logger.info("Starting DMARC automated scheduler")
     start_background_scheduler()
     
-    # Get port from environment or default to 8001 (matching start_servers.sh)
-    port = int(os.getenv("PORT", 8001))
+    # Get port from environment or default to 8000 (matching Docker configuration)
+    port = int(os.getenv("PORT", 8000))
     
     # Start the FastAPI application
     uvicorn.run(app, host="0.0.0.0", port=port) 
