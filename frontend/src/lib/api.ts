@@ -1,6 +1,10 @@
 import { supabase } from './supabase'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (
+  process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:8000' 
+    : 'https://dmarc.sharanprakash.me'
+)
 
 // Helper function to get the auth token
 async function getAuthToken(): Promise<string | null> {
@@ -64,7 +68,14 @@ export interface DMARCRecord {
   header_from?: string
   envelope_from?: string
   envelope_to?: string
-  created_at: string
+}
+
+export interface AnalyticsSummary {
+  total_reports: number
+  total_records: number
+  pass_count: number
+  fail_count: number
+  pass_rate: number
 }
 
 export interface IMAPConfig {
@@ -80,14 +91,6 @@ export interface IMAPConfig {
   last_polled_at?: string
   created_at: string
   updated_at: string
-}
-
-export interface AnalyticsSummary {
-  total_reports: number
-  total_records: number
-  pass_count: number
-  fail_count: number
-  pass_rate: number
 }
 
 export interface UserProfile {
@@ -120,7 +123,7 @@ export const api = {
       fail_count: number;
     };
   }> {
-    const response = await authenticatedFetch('/api/parse-dmarc', {
+    const response = await authenticatedFetch('/api/v1/parse-dmarc', {
       method: 'POST',
       body: JSON.stringify({ xml_data: xmlData })
     })
@@ -134,7 +137,7 @@ export const api = {
 
   // Reports
   async getReports(): Promise<DMARCReport[]> {
-    const response = await authenticatedFetch('/api/reports')
+    const response = await authenticatedFetch('/api/v1/reports')
     if (!response.ok) {
       throw new Error(`Failed to fetch reports: ${response.statusText}`)
     }
@@ -143,7 +146,7 @@ export const api = {
   },
 
   async getReport(reportId: string): Promise<DMARCReport & { records: DMARCRecord[] }> {
-    const response = await authenticatedFetch(`/api/reports/${reportId}`)
+    const response = await authenticatedFetch(`/api/v1/reports/${reportId}`)
     if (!response.ok) {
       throw new Error(`Failed to fetch report: ${response.statusText}`)
     }
@@ -153,7 +156,7 @@ export const api = {
 
   // Analytics
   async getAnalyticsSummary(): Promise<AnalyticsSummary> {
-    const response = await authenticatedFetch('/api/analytics/summary')
+    const response = await authenticatedFetch('/api/v1/analytics/summary')
     if (!response.ok) {
       throw new Error(`Failed to fetch analytics: ${response.statusText}`)
     }
@@ -163,7 +166,7 @@ export const api = {
 
   // User Profile
   async getUserProfile(): Promise<UserProfile> {
-    const response = await authenticatedFetch('/api/user/profile')
+    const response = await authenticatedFetch('/api/v1/user/profile')
     if (!response.ok) {
       throw new Error(`Failed to fetch user profile: ${response.statusText}`)
     }
@@ -173,7 +176,7 @@ export const api = {
 
   // IMAP Configs
   async getImapConfigs(): Promise<IMAPConfig[]> {
-    const response = await authenticatedFetch('/api/imap-configs')
+    const response = await authenticatedFetch('/api/v1/imap-configs')
     if (!response.ok) {
       throw new Error(`Failed to fetch IMAP configs: ${response.statusText}`)
     }
@@ -190,7 +193,7 @@ export const api = {
     use_ssl?: boolean
     folder?: string
   }): Promise<IMAPConfig> {
-    const response = await authenticatedFetch('/api/imap-configs', {
+    const response = await authenticatedFetch('/api/v1/imap-configs', {
       method: 'POST',
       body: JSON.stringify(config),
     })
@@ -202,7 +205,7 @@ export const api = {
   },
 
   async updateImapConfig(configId: string, config: Partial<IMAPConfig>): Promise<IMAPConfig> {
-    const response = await authenticatedFetch(`/api/imap-configs/${configId}`, {
+    const response = await authenticatedFetch(`/api/v1/imap-configs/${configId}`, {
       method: 'PUT',
       body: JSON.stringify(config),
     })
@@ -214,7 +217,7 @@ export const api = {
   },
 
   async deleteImapConfig(configId: string): Promise<void> {
-    const response = await authenticatedFetch(`/api/imap-configs/${configId}`, {
+    const response = await authenticatedFetch(`/api/v1/imap-configs/${configId}`, {
       method: 'DELETE',
     })
     if (!response.ok) {
@@ -228,7 +231,7 @@ export const api = {
     processed_count?: number;
     error_count?: number;
   }> {
-    const response = await authenticatedFetch(`/api/process-emails/${configId}`, {
+    const response = await authenticatedFetch(`/api/v1/process-emails/${configId}`, {
       method: 'POST',
     })
     if (!response.ok) {
