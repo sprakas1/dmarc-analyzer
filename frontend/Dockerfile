@@ -25,6 +25,9 @@ FROM node:18-slim AS runner
 
 WORKDIR /app
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Environment variables for runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
@@ -42,7 +45,8 @@ USER node
 
 EXPOSE 3000
 
-# Health check removed - curl not available in node:18-slim
-# The application will be monitored via reverse proxy
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
 
 CMD ["npm", "start"] 

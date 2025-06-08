@@ -37,20 +37,13 @@ jobs:
           NEXT_PUBLIC_API_URL=https://dmarc.sharanprakash.me
           EOF
           
-          # Stop existing containers
-          docker-compose down || true
+          # Make deploy script executable
+          chmod +x deploy.sh
           
-          # Pull latest images and rebuild
-          docker-compose build --no-cache
+          # Perform zero-downtime deployment
+          echo "Starting zero-downtime deployment..."
+          ./deploy.sh deploy
           
-          # Start services
-          docker-compose up -d
-          
-          # Wait for health checks
-          echo "Waiting for services to be healthy..."
-          timeout 120 bash -c 'until docker-compose ps | grep -q "healthy"; do sleep 5; done'
-          
-          # Show status
+          # Show final status
           echo "Deployment complete!"
-          docker-compose ps
-          docker-compose logs --tail=20 
+          ./deploy.sh status 
