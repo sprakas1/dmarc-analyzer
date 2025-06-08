@@ -62,7 +62,7 @@ services:
         max_attempts: 3
 
   scheduler:
-    build: 
+    build:
       context: ./backend
       dockerfile: Dockerfile
     command: python scheduler.py
@@ -70,6 +70,12 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "scheduler.py"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     depends_on:
       backend:
         condition: service_healthy
