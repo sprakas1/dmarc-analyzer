@@ -32,16 +32,20 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1
 
+# Create a non-root user for security
+RUN groupadd --gid 1001 nodejs
+RUN useradd --uid 1001 --gid nodejs nodejs
+
 # Copy package files and install only production dependencies
 COPY --from=builder /app/package*.json ./
 RUN npm ci --omit=dev
 
 # Copy built application from builder stage
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nodejs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nodejs:nodejs /app/public ./public
 
-# Use existing node user (uid 1000) instead of creating custom user
-USER node
+# Change ownership and switch to non-root user
+USER nodejs
 
 EXPOSE 3000
 

@@ -5,7 +5,6 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: []
   },
-  output: 'standalone',
   // Build optimizations for CI/Docker builds  
   eslint: {
     ignoreDuringBuilds: true
