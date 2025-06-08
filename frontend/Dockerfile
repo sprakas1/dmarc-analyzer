@@ -42,8 +42,7 @@ USER node
 
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:3000 || exit 1
+# Health check removed - curl not available in node:18-slim
+# The application will be monitored via reverse proxy
 
 CMD ["npm", "start"] 
