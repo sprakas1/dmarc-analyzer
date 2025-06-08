@@ -29,7 +29,7 @@ usage() {
 # Check if .env exists
 if [ ! -f .env ]; then
     warn "No .env file found. Please create one with required environment variables."
-    warn "Required variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY"
+    warn "Required variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, NEXT_PUBLIC_API_URL"
 fi
 
 # Main commands
