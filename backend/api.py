@@ -41,7 +41,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",  # Next.js dev server
         "http://127.0.0.1:3000",
-        "https://your-domain.com"  # Add your production domain
+        "https://dmarc.sharanprakash.me",  # Production frontend domain
+        "https://sharanprakash.me"  # Main domain (if needed)
     ],
     allow_credentials=True,
     allow_methods=["*"],
