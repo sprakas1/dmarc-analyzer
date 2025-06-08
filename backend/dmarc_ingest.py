@@ -301,7 +301,8 @@ def update_imap_last_polled(supabase, config_id: str):
 
 def process_dmarc_ingestion(user_id: str, imap_config: Dict[str, Any], max_retries: int = 3, access_token: str = None) -> Dict[str, Any]:
     """Main function to process DMARC ingestion for a user with retry logic"""
-    supabase = get_supabase_client(access_token)
+    # Use service role key if no access token is provided (background task)
+    supabase = get_supabase_client(access_token=access_token, use_service_role=not bool(access_token))
     results = {
         'processed': 0,
         'errors': 0,

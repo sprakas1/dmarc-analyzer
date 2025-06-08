@@ -26,7 +26,7 @@ class DmarcScheduler:
         """Get all active IMAP configurations for all users"""
         try:
             # Use service role for accessing all configs
-            supabase = get_supabase_client()
+            supabase = get_supabase_client(use_service_role=True)
             
             # Get all active IMAP configs with user profiles
             result = supabase.table('imap_configs').select(
