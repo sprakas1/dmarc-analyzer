@@ -198,7 +198,17 @@ export const api = {
       body: JSON.stringify(config),
     })
     if (!response.ok) {
-      throw new Error(`Failed to create IMAP config: ${response.statusText}`)
+      // Try to extract detailed error message from response body
+      let errorMessage = `Failed to create IMAP config: ${response.statusText}`
+      try {
+        const errorData = await response.json()
+        if (errorData.detail) {
+          errorMessage = `Failed to create IMAP config: ${errorData.detail}`
+        }
+      } catch {
+        // If we can't parse the response body, use the statusText
+      }
+      throw new Error(errorMessage)
     }
     const data = await response.json()
     return data.config
@@ -210,7 +220,17 @@ export const api = {
       body: JSON.stringify(config),
     })
     if (!response.ok) {
-      throw new Error(`Failed to update IMAP config: ${response.statusText}`)
+      // Try to extract detailed error message from response body
+      let errorMessage = `Failed to update IMAP config: ${response.statusText}`
+      try {
+        const errorData = await response.json()
+        if (errorData.detail) {
+          errorMessage = `Failed to update IMAP config: ${errorData.detail}`
+        }
+      } catch {
+        // If we can't parse the response body, use the statusText
+      }
+      throw new Error(errorMessage)
     }
     const data = await response.json()
     return data.config
@@ -221,7 +241,17 @@ export const api = {
       method: 'DELETE',
     })
     if (!response.ok) {
-      throw new Error(`Failed to delete IMAP config: ${response.statusText}`)
+      // Try to extract detailed error message from response body
+      let errorMessage = `Failed to delete IMAP config: ${response.statusText}`
+      try {
+        const errorData = await response.json()
+        if (errorData.detail) {
+          errorMessage = `Failed to delete IMAP config: ${errorData.detail}`
+        }
+      } catch {
+        // If we can't parse the response body, use the statusText
+      }
+      throw new Error(errorMessage)
     }
   },
 
@@ -235,7 +265,17 @@ export const api = {
       method: 'POST',
     })
     if (!response.ok) {
-      throw new Error(`Failed to process emails: ${response.statusText}`)
+      // Try to extract detailed error message from response body
+      let errorMessage = `Failed to process emails: ${response.statusText}`
+      try {
+        const errorData = await response.json()
+        if (errorData.detail) {
+          errorMessage = `Failed to process emails: ${errorData.detail}`
+        }
+      } catch {
+        // If we can't parse the response body, use the statusText
+      }
+      throw new Error(errorMessage)
     }
     return response.json()
   },
@@ -267,7 +307,91 @@ export async function testParseDmarc(xmlData: string, token: string): Promise<{
 
 export function handleApiError(error: unknown): string {
   if (error instanceof Error) {
-    return error.message
+    // Try to extract more detailed error from the message
+    let errorMessage = error.message
+    
+    // If it's a fetch error, try to extract the backend detail
+    if (errorMessage.includes('Failed to create IMAP config:') || 
+        errorMessage.includes('Failed to update IMAP config:') ||
+        errorMessage.includes('Failed to process emails:')) {
+      
+      // Common Gmail/Google Workspace errors
+      if (errorMessage.includes('Application-specific password required') ||
+          errorMessage.includes('support.google.com/accounts/answer/185833')) {
+        return `Gmail/Google Workspace Authentication Required:
+        
+You need to use an App Password instead of your regular password:
+
+1. Enable 2-Factor Authentication on your Google account
+2. Go to Google Account Settings → Security → 2-Step Verification
+3. At the bottom, click "App passwords"
+4. Select "Mail" and "Other (Custom name)"
+5. Enter "DMARC Analyzer" as the name
+6. Use the generated 16-character password instead of your regular password
+
+For more info: https://support.google.com/accounts/answer/185833`
+      }
+      
+      // Yahoo Mail errors
+      if (errorMessage.includes('Invalid credentials') && errorMessage.includes('yahoo')) {
+        return `Yahoo Mail Authentication Required:
+        
+You need to use an App Password:
+
+1. Go to Yahoo Account Security settings
+2. Generate an App Password for Mail
+3. Use the generated password instead of your regular password`
+      }
+      
+      // Outlook/Hotmail errors
+      if (errorMessage.includes('Invalid credentials') && 
+          (errorMessage.includes('outlook') || errorMessage.includes('hotmail') || errorMessage.includes('live.com'))) {
+        return `Outlook/Hotmail Authentication Required:
+        
+You need to use an App Password:
+
+1. Go to Microsoft Account Security settings
+2. Enable 2-factor authentication
+3. Generate an App Password for mail
+4. Use the generated password instead of your regular password`
+      }
+      
+      // Generic authentication errors
+      if (errorMessage.includes('Invalid credentials') || 
+          errorMessage.includes('Authentication failed') ||
+          errorMessage.includes('LOGIN failed')) {
+        return `Email Authentication Failed:
+        
+Please check:
+• Username/email is correct
+• Password is correct (use App Password for Gmail/Yahoo/Outlook)
+• IMAP is enabled in your email provider settings
+• Server settings are correct (host, port, SSL)`
+      }
+      
+      // Connection timeout errors
+      if (errorMessage.includes('timeout') || errorMessage.includes('Connection refused')) {
+        return `Connection Failed:
+        
+Please check:
+• Internet connection is stable
+• IMAP server address is correct
+• Port number is correct (usually 993 for SSL, 143 for non-SSL)
+• Firewall/antivirus is not blocking the connection`
+      }
+      
+      // SSL/TLS errors
+      if (errorMessage.includes('SSL') || errorMessage.includes('TLS') || errorMessage.includes('certificate')) {
+        return `SSL/TLS Connection Error:
+        
+Please try:
+• Enable "Use SSL" if not already enabled
+• Check if your email provider supports SSL on port 993
+• Contact your email provider for correct SSL settings`
+      }
+    }
+    
+    return errorMessage
   }
   return 'An unexpected error occurred'
 } 
