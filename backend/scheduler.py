@@ -50,6 +50,24 @@ class DmarcScheduler:
         logger.info(f"Processing config '{config_name}' for user {user_email}")
         
         try:
+            # Check rate limits before processing (background tasks get relaxed limits)
+            from rate_limiter import get_imap_rate_limiter
+            rate_limiter = get_imap_rate_limiter()
+            
+            is_limited, reason, retry_after = rate_limiter.is_rate_limited(user_id)
+            if is_limited:
+                logger.warning(f"Rate limited scheduled processing for user {user_id} config {config_name}: {reason}")
+                return {
+                    "status": "rate_limited",
+                    "config_name": config_name,
+                    "user_email": user_email,
+                    "reason": reason,
+                    "retry_after": retry_after
+                }
+        except Exception as rate_e:
+            logger.warning(f"Failed to check rate limits for scheduled task: {rate_e}")
+        
+        try:
             # Decrypt password
             if config.get('password_encrypted') and config.get('encryption_key_id'):
                 try:

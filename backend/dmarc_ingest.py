@@ -99,16 +99,29 @@ def is_dmarc_email(email_message) -> bool:
         logger.warning(f"Error in DMARC detection: {e}")
         return False
 
-def connect_imap(host: str, username: str, password: str, port: int = 993, use_ssl: bool = True):
-    """Connect to IMAP server"""
+def connect_imap(host: str, username: str, password: str, port: int = 993, use_ssl: bool = True, 
+                 user_id: str = None, config_name: str = None):
+    """Connect to IMAP server with rate limiting tracking"""
+    success = False
     try:
         client = imapclient.IMAPClient(host, port=port, ssl=use_ssl)
         client.login(username, password)
         logger.info(f"Connected to IMAP server: {host}")
+        success = True
         return client
     except Exception as e:
         logger.error(f"Failed to connect to IMAP: {e}")
+        success = False
         raise
+    finally:
+        # Record the attempt in rate limiter if user_id provided
+        if user_id:
+            try:
+                from rate_limiter import get_imap_rate_limiter
+                rate_limiter = get_imap_rate_limiter()
+                rate_limiter.record_attempt(user_id, success, config_name or f"{username}@{host}")
+            except Exception as rate_e:
+                logger.warning(f"Failed to record rate limit attempt: {rate_e}")
 
 def fetch_dmarc_emails(client, folder: str = 'INBOX', limit: int = 50) -> List[tuple]:
     """Fetch unread DMARC emails from IMAP folder with improved filtering"""
@@ -322,7 +335,9 @@ def process_dmarc_ingestion(user_id: str, imap_config: Dict[str, Any], max_retri
                     username=imap_config['username'],
                     password=imap_config['password'],
                     port=imap_config.get('port', 993),
-                    use_ssl=imap_config.get('use_ssl', True)
+                    use_ssl=imap_config.get('use_ssl', True),
+                    user_id=user_id,
+                    config_name=imap_config.get('name', f"{imap_config['username']}@{imap_config['host']}")
                 )
                 break
             except Exception as e:

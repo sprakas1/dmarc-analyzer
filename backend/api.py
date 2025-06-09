@@ -15,7 +15,7 @@ import base64
 
 from config import get_supabase_client
 from dmarc_parser import parse_dmarc_xml
-from dmarc_ingest import store_dmarc_report, connect_imap
+from dmarc_ingest import store_dmarc_report, connect_imap, log_audit_event
 from auth import get_current_user, get_optional_user, require_admin
 from scheduler import trigger_manual_processing, scheduler, start_background_scheduler
 
@@ -146,6 +146,19 @@ async def get_imap_configs(user = Depends(get_current_user)):
 async def create_imap_config(config_data: dict, user = Depends(get_current_user)):
     """Create a new IMAP configuration"""
     try:
+        # Check rate limits before attempting IMAP connection
+        from rate_limiter import get_imap_rate_limiter
+        rate_limiter = get_imap_rate_limiter()
+        
+        is_limited, reason, retry_after = rate_limiter.is_rate_limited(user['id'])
+        if is_limited:
+            logger.warning(f"Rate limited IMAP config creation for user {user['id']}: {reason}")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited: {reason}. Retry after {retry_after} seconds.",
+                headers={"Retry-After": str(retry_after)}
+            )
+        
         supabase = get_supabase_client(user.get('access_token'))
         
         # Validate required fields
@@ -155,24 +168,33 @@ async def create_imap_config(config_data: dict, user = Depends(get_current_user)
                 raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
         
         # Test IMAP connection before saving
+        success = False
+        config_name = config_data.get('name', f"{config_data['username']}@{config_data['host']}")
         try:
             test_client = connect_imap(
                 host=config_data['host'],
                 username=config_data['username'],
                 password=config_data['password'],
                 port=config_data.get('port', 993),
-                use_ssl=config_data.get('use_ssl', True)
+                use_ssl=config_data.get('use_ssl', True),
+                user_id=user['id'],
+                config_name=config_name
             )
             # Test folder access
             test_client.select_folder(config_data.get('folder', 'INBOX'))
             test_client.logout()
             logger.info(f"IMAP connection test successful for {config_data['host']}")
+            success = True
         except Exception as e:
             logger.error(f"IMAP connection test failed: {str(e)}")
+            success = False
             raise HTTPException(
                 status_code=400, 
                 detail=f"Failed to connect to IMAP server: {str(e)}"
             )
+        finally:
+            # Record the attempt in rate limiter
+            rate_limiter.record_attempt(user['id'], success, config_name)
         
         # Extract password and encrypt it securely with AES-256-GCM
         password = config_data.pop('password')
@@ -277,6 +299,19 @@ async def delete_imap_config(config_id: str, user = Depends(get_current_user)):
 async def process_emails(config_id: str, user = Depends(get_current_user)):
     """Process emails for a specific IMAP configuration"""
     try:
+        # Check rate limits before processing
+        from rate_limiter import get_imap_rate_limiter
+        rate_limiter = get_imap_rate_limiter()
+        
+        is_limited, reason, retry_after = rate_limiter.is_rate_limited(user['id'])
+        if is_limited:
+            logger.warning(f"Rate limited email processing for user {user['id']}: {reason}")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited: {reason}. Retry after {retry_after} seconds.",
+                headers={"Retry-After": str(retry_after)}
+            )
+        
         supabase = get_supabase_client(user.get('access_token'))
         
         # Verify ownership
@@ -393,6 +428,69 @@ async def trigger_user_processing(user = Depends(get_current_user)):
         
     except Exception as e:
         logger.error(f"Error triggering user processing: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Rate limiting endpoints
+@app.get("/api/v1/rate-limits/status")
+async def get_rate_limit_status(user = Depends(get_current_user)):
+    """Get rate limiting status for the current user"""
+    try:
+        from rate_limiter import get_imap_rate_limiter
+        rate_limiter = get_imap_rate_limiter()
+        
+        user_stats = rate_limiter.get_user_stats(user['id'])
+        
+        return {
+            "user_id": user['id'],
+            "rate_limits": user_stats,
+            "message": "Current rate limiting status"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching rate limit status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/admin/rate-limits/global")
+async def get_global_rate_limits(user = Depends(require_admin)):
+    """Get global rate limiting statistics (admin only)"""
+    try:
+        from rate_limiter import get_imap_rate_limiter
+        rate_limiter = get_imap_rate_limiter()
+        
+        global_stats = rate_limiter.get_global_stats()
+        
+        return {
+            "global_statistics": global_stats,
+            "message": "Global rate limiting statistics"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching global rate limits: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/admin/rate-limits/reset/{user_id}")
+async def reset_user_rate_limits(user_id: str, admin_user = Depends(require_admin)):
+    """Reset rate limits for a specific user (admin only)"""
+    try:
+        from rate_limiter import get_imap_rate_limiter
+        rate_limiter = get_imap_rate_limiter()
+        
+        had_limits = rate_limiter.reset_user_limits(user_id)
+        
+        # Log admin action
+        log_audit_event(
+            get_supabase_client(admin_user.get('access_token')),
+            admin_user['id'],
+            'rate_limits_reset',
+            'user',
+            user_id,
+            {'admin_user': admin_user['id'], 'target_user': user_id}
+        )
+        
+        return {
+            "message": f"Rate limits {'reset' if had_limits else 'were already clear'} for user {user_id}",
+            "had_limits": had_limits
+        }
+    except Exception as e:
+        logger.error(f"Error resetting user rate limits: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
