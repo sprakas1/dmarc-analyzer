@@ -91,10 +91,19 @@ export default function Reports({ session }: ReportsProps) {
     return filter === 'pass' ? isPass : !isPass
   })
 
-  const totalPages = Math.ceil(filteredReports.length / itemsPerPage)
+  // Sort reports by date in descending order (newest first)
+  const sortedReports = [...filteredReports].sort((a, b) => {
+    // Use date_range_begin if available, otherwise fall back to created_at
+    const dateA = a.date_range_begin ? new Date(a.date_range_begin) : new Date(a.created_at)
+    const dateB = b.date_range_begin ? new Date(b.date_range_begin) : new Date(b.created_at)
+    
+    return dateB.getTime() - dateA.getTime() // Descending order (newest first)
+  })
+
+  const totalPages = Math.ceil(sortedReports.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  const currentReports = filteredReports.slice(startIndex, endIndex)
+  const currentReports = sortedReports.slice(startIndex, endIndex)
 
   const getOverallResult = (report: DMARCReport): 'pass' | 'fail' => {
     return report.pass_count > report.fail_count ? 'pass' : 'fail'
@@ -299,8 +308,8 @@ export default function Reports({ session }: ReportsProps) {
               <div className="hidden sm:block">
                 <p className="text-sm text-gray-700">
                   Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
-                  <span className="font-medium">{Math.min(endIndex, filteredReports.length)}</span> of{' '}
-                  <span className="font-medium">{filteredReports.length}</span> results
+                  <span className="font-medium">{Math.min(endIndex, sortedReports.length)}</span> of{' '}
+                  <span className="font-medium">{sortedReports.length}</span> results
                 </p>
               </div>
               <div className="flex-1 flex justify-between sm:justify-end">

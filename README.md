@@ -1,188 +1,240 @@
-# DMARC Analyzer
+# DMARC Analyzer with AI Analysis
 
-[![Deploy to DigitalOcean](https://github.com/sprakas1/dmarc-analyzer/actions/workflows/deploy.yml/badge.svg)](https://github.com/sprakas1/dmarc-analyzer/actions/workflows/deploy.yml)
-
-A comprehensive DMARC report analysis platform that automatically ingests, parses, and visualizes DMARC reports to help organizations monitor email authentication and security.
+A comprehensive DMARC report analyzer with intelligent AI-powered analysis, automated testing, and actionable recommendations for email deliverability.
 
 ## 🚀 Features
 
-- **Automated IMAP Polling**: Connect your mailbox to automatically fetch DMARC reports
-- **Comprehensive Parsing**: Extract all relevant data from DMARC XML reports
-- **Secure Storage**: Encrypted storage with Supabase backend
-- **User Authentication**: Secure email/password authentication
-- **Multi-Domain Support**: Manage DMARC reports for multiple domains
-- **Audit Logging**: Track all user actions for compliance
-- **Export Capabilities**: Export aggregated data in CSV/JSON formats
-- **Row Level Security**: Multi-tenant data isolation
+### Core Functionality
+- **IMAP Integration:** Automated polling and parsing of DMARC reports
+- **Real-time Dashboard:** Health scores, trend analysis, and failure detection
+- **Data Export:** CSV, JSON, and PDF report generation
+- **Secure Authentication:** Supabase-powered user management
 
-## 🏗️ Architecture
+### AI Analysis Engine
+- **Intelligent Failure Detection:** Automatic identification of DMARC policy violations
+- **Pattern Analysis:** Detection of trends, spikes, and anomalies
+- **Root Cause Analysis:** Smart analysis of SPF, DKIM, and alignment issues
+- **Actionable Recommendations:** Step-by-step guidance to fix deliverability issues
+- **Proactive Alerts:** Smart notifications for critical issues
 
-- **Backend**: Python with Supabase integration
-- **Database**: PostgreSQL via Supabase (managed)
-- **Authentication**: Supabase Auth
-- **Email Processing**: IMAP polling with lxml XML parsing
-- **Security**: Row Level Security (RLS) policies
+### Advanced Testing & Development
+- **Automated Browser Testing:** Playwright MCP integration for comprehensive UI testing
+- **Database Operations:** Direct Supabase integration for schema management
+- **Visual Debugging:** Screenshot capture and performance monitoring
+- **Cross-browser Compatibility:** Testing across Chrome, Firefox, Safari
 
-## 📋 Prerequisites
+## 🛠️ Tech Stack
 
-- Python 3.9+
-- Supabase account
-- IMAP-enabled email account for DMARC reports
+- **Backend:** Python (IMAP polling, XML parsing, AI analysis)
+- **Database:** Supabase (managed Postgres with built-in auth)
+- **Frontend:** React/TypeScript with modern UI components
+- **Testing:** Playwright MCP for automated browser testing
+- **AI Analysis:** Pattern detection and recommendation engine
 
-## 🛠️ Setup
+## 📋 Quick Start
 
-### Backend Setup
+### Prerequisites
+- Node.js 18+
+- Python 3.8+
+- Cursor IDE with MCP support
 
-1. **Clone and navigate to the project**:
+### Development Setup
+
+1. **Clone and Install:**
    ```bash
-   cd backend
-   ```
-
-2. **Create and activate virtual environment**:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**:
-   ```bash
+   git clone <repository-url>
+   cd dmarc-analyzer
+   npm install
    pip install -r requirements.txt
    ```
 
-4. **Configure environment**:
-   Create a `.env` file in the `backend` directory:
-   ```env
-   SUPABASE_URL=https://kvbqrdcehjrkoffzjfmh.supabase.co
-   SUPABASE_KEY=your-supabase-anon-key
-   
-   # For testing
-   IMAP_HOST=imap.gmail.com
-   IMAP_USER=your-email@gmail.com
-   IMAP_PASS=your-app-password
-   TEST_USER_ID=your-test-user-uuid
+2. **Configure MCP Integration:**
+   - Restart Cursor to load MCP servers
+   - Verify setup: `Cursor Settings` → `Features` → `MCP`
+
+3. **Quick Test:**
+   ```
+   "Take a screenshot of localhost:3000 to verify setup"
+   "List all my Supabase projects"
    ```
 
-### Database Schema
+## 📚 Documentation
 
-The project uses a comprehensive schema with the following tables:
+### Core Architecture
+- [`dmarc-analyzer.mdc`](.cursor/rules/dmarc-analyzer.mdc) - Project overview and AI analysis features
+- [`backend.mdc`](.cursor/rules/backend.mdc) - Python backend implementation details
+- [`frontend.mdc`](.cursor/rules/frontend.mdc) - React UI components and user experience
 
-- **profiles**: User accounts extending Supabase auth
-- **imap_configs**: IMAP connection configurations
-- **dmarc_reports**: DMARC report metadata and summaries
-- **dmarc_records**: Individual record data from reports
-- **audit_logs**: User action tracking
+### Development & Testing
+- [`testing-playwright.mdc`](.cursor/rules/testing-playwright.mdc) - Comprehensive testing scenarios
+- [`testing-quick-reference.mdc`](.cursor/rules/testing-quick-reference.mdc) - Quick test commands
+- [`mcp-setup.mdc`](.cursor/rules/mcp-setup.mdc) - MCP configuration and troubleshooting
 
-Key features:
-- Row Level Security (RLS) for multi-tenant isolation
-- Automatic profile creation on user signup
-- Foreign key relationships for data integrity
-- Indexes for optimal query performance
+### Infrastructure
+- [`database.mdc`](.cursor/rules/database.mdc) - Database schema and operations
+- [`deployment.mdc`](.cursor/rules/deployment.mdc) - Deployment and infrastructure setup
 
-## 📊 Database Design
+## 🧪 Testing with Playwright MCP
 
-```sql
--- Core tables
-profiles (extends auth.users)
-├── imap_configs (1:N)
-├── dmarc_reports (1:N)
-│   └── dmarc_records (1:N)
-└── audit_logs (1:N)
-```
-
-## 🔧 Usage
-
-### Running DMARC Ingestion
-
+### Essential Test Commands
 ```bash
-cd backend
-source venv/bin/activate
-python dmarc_ingest.py
+# Quick functionality check
+"Test the complete DMARC setup flow from login to viewing first report"
+
+# UI validation
+"Test all dashboard widgets and verify they display correctly"
+
+# Form testing
+"Test IMAP credential form with both valid and invalid inputs"
+
+# Performance testing
+"Test dashboard loading performance with large datasets"
 ```
 
-The ingestion script will:
-1. Connect to your IMAP server
-2. Fetch unread DMARC report emails
-3. Extract and decompress XML attachments
-4. Parse DMARC data into structured format
-5. Store reports and records in the database
-6. Mark emails as read
-7. Log all actions for audit purposes
+### Advanced Testing
+```bash
+# Cross-browser testing
+"Test core functionality in Chrome, Firefox, and Safari"
 
-### Key Components
+# Accessibility testing
+"Verify keyboard navigation and screen reader compatibility"
 
-#### DMARC Parser (`dmarc_parser.py`)
-- Handles ZIP/GZIP compressed attachments
-- Comprehensive XML parsing following DMARC spec
-- Extracts metadata, policy info, and individual records
-- Calculates pass/fail statistics
+# Visual regression testing
+"Take screenshots of each page to verify visual consistency"
+```
 
-#### Database Integration (`config.py`)
-- Supabase client setup and configuration
-- Environment variable management
-- Connection pooling and error handling
+## 🎯 AI Analysis Workflow
 
-#### Ingestion Engine (`dmarc_ingest.py`)
-- IMAP connection and email fetching
-- Batch processing of DMARC reports
-- Error handling and recovery
-- Audit logging for all operations
+### 1. Data Ingestion
+- Automated IMAP polling for DMARC reports
+- XML parsing and data normalization
+- Real-time data ingestion to Supabase
 
-## 🔒 Security Features
+### 2. Analysis Engine
+- Pattern detection algorithms for failure identification
+- Statistical analysis of trends and anomalies
+- Cross-reference with DNS records and IP reputation
 
-- **Row Level Security**: Users can only access their own data
-- **Password Encryption**: IMAP passwords stored encrypted
-- **Audit Logging**: All user actions tracked
-- **Input Validation**: Comprehensive validation of all inputs
-- **SQL Injection Protection**: Parameterized queries only
+### 3. Recommendation Generation
+- Rule-based system for actionable solutions
+- SPF/DKIM configuration optimization
+- Policy progression recommendations (none → quarantine → reject)
 
-## 📈 Monitoring & Analytics
+### 4. Alert & Notification System
+- Threshold-based monitoring with smart alerting
+- Priority classification and notification management
+- Integration with dashboard for real-time updates
 
-The system tracks:
-- Total DMARC compliance rates
-- Domain-specific authentication results
-- Source IP analysis
-- SPF/DKIM failure patterns
-- Policy evaluation trends
+## 🔧 Development Workflow
 
-## 🚦 Status
+### With MCP Integration
+1. **Database Development:** Use Supabase MCP for schema creation and migrations
+2. **Frontend Testing:** Use Playwright MCP for UI validation and debugging
+3. **End-to-End Testing:** Combine both MCPs for complete workflow verification
+4. **AI Analysis Testing:** Validate analysis results and recommendations
 
-**Current**: MVP with core ingestion and storage functionality
-**Next**: Frontend dashboard and visualization components
-
-## 🤝 Contributing
-
-This project follows production-ready development practices:
-- Comprehensive error handling
-- Detailed logging
-- Type hints throughout
-- Modular architecture
-- Security-first design
-
-## 📝 Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `SUPABASE_URL` | Supabase project URL | Yes |
-| `SUPABASE_KEY` | Supabase anon key | Yes |
-| `IMAP_HOST` | IMAP server hostname | For testing |
-| `IMAP_USER` | IMAP username | For testing |
-| `IMAP_PASS` | IMAP password | For testing |
-| `TEST_USER_ID` | Test user UUID | For testing |
-
-## 🔍 Troubleshooting
-
-Common issues and solutions:
-- **IMAP Connection Failed**: Check credentials and enable "Less secure app access" for Gmail
-- **Permission Denied**: Ensure proper RLS policies are in place
-- **XML Parsing Errors**: Check DMARC report format validity
-- **Database Connection Issues**: Verify Supabase URL and API key
-
-## 📄 License
-
-This project is designed for production use with enterprise-grade security and scalability considerations.
+### Recommended Flow
+1. Build feature with database operations
+2. Test UI components and interactions
+3. Validate end-to-end functionality
+4. Deploy with automated testing verification
 
 ## 🚀 Deployment
 
-This application auto-deploys to DigitalOcean droplet via GitHub Actions on every push to main branch.
+### Production Setup
+- Supabase project configuration
+- Environment variable management
+- Automated deployment pipeline
+- Monitoring and health checks
 
-**Live Application**: https://dmarc.sharanprakash.me 
+### Testing Pipeline
+- Pre-commit testing with Playwright MCP
+- Pull request validation
+- Post-deployment verification
+- Continuous monitoring
+
+## 🤝 Contributing
+
+### Development Guidelines
+- Follow TypeScript/Python coding standards
+- Use Playwright MCP for testing new features
+- Document AI analysis logic and recommendations
+- Maintain comprehensive test coverage
+
+### Testing Requirements
+- All UI components must have Playwright tests
+- Database operations require migration testing
+- AI analysis features need validation tests
+- Cross-browser compatibility verification
+
+## 📊 AI Analysis Features Deep Dive
+
+### Health Scoring System
+- 0-100 scale with color-coded indicators
+- Real-time calculation based on failure rates
+- Trend analysis (improving/stable/declining)
+- Historical health score tracking
+
+### Pattern Detection
+- Statistical anomaly detection
+- Failure spike identification
+- Seasonal pattern recognition
+- Comparative analysis across time periods
+
+### Recommendation Engine
+- DNS record optimization suggestions
+- Email service provider configuration guidance
+- Policy enforcement recommendations
+- Integration-specific best practices
+
+### Alert Management
+- Configurable threshold settings
+- Smart notification logic to prevent alert fatigue
+- Priority-based alert classification
+- Historical alert tracking and resolution
+
+## 🔒 Security & Privacy
+
+### Data Protection
+- Encrypted IMAP credential storage
+- Secure session management with Supabase Auth
+- GDPR-compliant data handling
+- Regular security audit and compliance checks
+
+### Testing Security
+- Isolated test environments
+- Secure test data management
+- Authentication testing scenarios
+- Privacy-preserving testing practices
+
+## 📈 Performance & Scalability
+
+### Optimization Features
+- Efficient DMARC data parsing and storage
+- Real-time dashboard updates with Supabase subscriptions
+- Optimized database queries and indexing
+- Scalable AI analysis pipeline
+
+### Performance Testing
+- Load testing with Playwright MCP
+- Database performance optimization
+- Frontend rendering performance
+- Mobile and cross-browser optimization
+
+## 📞 Support & Troubleshooting
+
+### Common Issues
+- MCP server configuration problems
+- Supabase connection issues
+- Playwright browser automation errors
+- AI analysis accuracy concerns
+
+### Debug Resources
+- Comprehensive error logging
+- Visual debugging with screenshots
+- Performance monitoring tools
+- Database query analysis
+
+---
+
+**Built with ❤️ using Cursor IDE, Supabase, and Playwright MCP** 
