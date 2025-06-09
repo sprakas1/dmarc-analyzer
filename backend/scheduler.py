@@ -51,11 +51,24 @@ class DmarcScheduler:
         
         try:
             # Decrypt password
-            if config.get('password_encrypted'):
+            if config.get('password_encrypted') and config.get('encryption_key_id'):
                 try:
-                    config['password'] = base64.b64decode(config['password_encrypted']).decode()
+                    from crypto import get_credential_encryption
+                    encryption = get_credential_encryption()
+                    config['password'] = encryption.decrypt_credential(
+                        config['password_encrypted'], 
+                        config['encryption_key_id']
+                    )
                 except Exception as e:
                     logger.error(f"Failed to decrypt password for config {config_id}: {e}")
+                    return {"status": "error", "error": "Failed to decrypt password"}
+            elif config.get('password_encrypted'):
+                # Legacy base64 decryption for backward compatibility
+                try:
+                    config['password'] = base64.b64decode(config['password_encrypted']).decode()
+                    logger.warning(f"Using legacy base64 decryption for scheduled config {config_id}")
+                except Exception as e:
+                    logger.error(f"Failed to decrypt legacy password for config {config_id}: {e}")
                     return {"status": "error", "error": "Failed to decrypt password"}
             else:
                 logger.error(f"No password configured for config {config_id}")

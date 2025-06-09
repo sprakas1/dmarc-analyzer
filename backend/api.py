@@ -174,14 +174,21 @@ async def create_imap_config(config_data: dict, user = Depends(get_current_user)
                 detail=f"Failed to connect to IMAP server: {str(e)}"
             )
         
-        # Extract password and encode it (basic encoding for now - consider stronger encryption for production)
+        # Extract password and encrypt it securely with AES-256-GCM
         password = config_data.pop('password')
-        password_encrypted = base64.b64encode(password.encode()).decode()
+        
+        # Import encryption module
+        from crypto import get_credential_encryption
+        encryption = get_credential_encryption()
+        
+        # Encrypt password securely
+        password_encrypted, encryption_key_id = encryption.encrypt_credential(password)
         
         # Set defaults and add encrypted password
         config_data.update({
             'user_id': user['id'],
             'password_encrypted': password_encrypted,
+            'encryption_key_id': encryption_key_id,
             'port': config_data.get('port', 993),
             'use_ssl': config_data.get('use_ssl', True),
             'folder': config_data.get('folder', 'INBOX'),
@@ -214,7 +221,15 @@ async def update_imap_config(config_id: str, config_data: dict, user = Depends(g
         # Handle password update if provided
         if 'password' in config_data and config_data['password']:
             password = config_data.pop('password')
-            config_data['password_encrypted'] = base64.b64encode(password.encode()).decode()
+            
+            # Import encryption module
+            from crypto import get_credential_encryption
+            encryption = get_credential_encryption()
+            
+            # Encrypt password securely
+            password_encrypted, encryption_key_id = encryption.encrypt_credential(password)
+            config_data['password_encrypted'] = password_encrypted
+            config_data['encryption_key_id'] = encryption_key_id
         elif 'password' in config_data:
             # Remove empty password field to avoid updating with empty value
             config_data.pop('password')
@@ -272,11 +287,24 @@ async def process_emails(config_id: str, user = Depends(get_current_user)):
         config = config_result.data[0]
         
         # Decrypt password
-        if config.get('password_encrypted'):
+        if config.get('password_encrypted') and config.get('encryption_key_id'):
             try:
-                config['password'] = base64.b64decode(config['password_encrypted']).decode()
+                from crypto import get_credential_encryption
+                encryption = get_credential_encryption()
+                config['password'] = encryption.decrypt_credential(
+                    config['password_encrypted'], 
+                    config['encryption_key_id']
+                )
             except Exception as e:
                 logger.error(f"Failed to decrypt password: {str(e)}")
+                raise HTTPException(status_code=500, detail="Failed to decrypt password")
+        elif config.get('password_encrypted'):
+            # Legacy base64 decryption for backward compatibility
+            try:
+                config['password'] = base64.b64decode(config['password_encrypted']).decode()
+                logger.warning(f"Using legacy base64 decryption for config {config['id']}")
+            except Exception as e:
+                logger.error(f"Failed to decrypt legacy password: {str(e)}")
                 raise HTTPException(status_code=500, detail="Failed to decrypt password")
         else:
             raise HTTPException(status_code=400, detail="No password configured for this IMAP configuration")
@@ -322,8 +350,17 @@ async def trigger_user_processing(user = Depends(get_current_user)):
         for config in configs_result.data:
             try:
                 # Decrypt password
-                if config.get('password_encrypted'):
+                if config.get('password_encrypted') and config.get('encryption_key_id'):
+                    from crypto import get_credential_encryption
+                    encryption = get_credential_encryption()
+                    config['password'] = encryption.decrypt_credential(
+                        config['password_encrypted'], 
+                        config['encryption_key_id']
+                    )
+                elif config.get('password_encrypted'):
+                    # Legacy base64 decryption for backward compatibility
                     config['password'] = base64.b64decode(config['password_encrypted']).decode()
+                    logger.warning(f"Using legacy base64 decryption for config {config['id']}")
                 else:
                     continue
                 

@@ -8,4 +8,6 @@ pydantic>=2.0.0
 requests==2.31.0
 imapclient>=3.0.0
 PyJWT>=2.8.0
-schedule>=1.2.0 
+schedule>=1.2.0
+# Security Dependencies
+cryptography>=41.0.0 
