@@ -201,16 +201,13 @@ def fetch_dmarc_emails(client, folder: str = 'INBOX', limit: int = 50) -> List[t
         logger.error(f"Failed to fetch emails: {e}")
         return []
 
-def store_dmarc_report(supabase, user_id: str, imap_config_id: str, report_data: Dict[str, Any]) -> str:
-    """Store DMARC report and return report ID"""
+def store_dmarc_report(supabase, user_id: str, imap_config_id: str, report_data: Dict[str, Any]) -> tuple[str, bool]:
+    """Store DMARC report with proper duplicate handling using UPSERT logic
+    
+    Returns:
+        tuple: (report_id, is_new_report) where is_new_report is True if newly created, False if duplicate
+    """
     try:
-        # Check for duplicate reports based on report_id and org_name
-        existing = supabase.table('dmarc_reports').select('id').eq('user_id', user_id).eq('report_id', report_data['report_id']).eq('org_name', report_data['org_name']).execute()
-        
-        if existing.data:
-            logger.info(f"Report {report_data['report_id']} from {report_data['org_name']} already exists, skipping")
-            return existing.data[0]['id']
-        
         # Prepare report data for database
         report_record = {
             'user_id': user_id,
@@ -230,55 +227,71 @@ def store_dmarc_report(supabase, user_id: str, imap_config_id: str, report_data:
             'status': 'processed'
         }
         
-        # Insert report
-        result = supabase.table('dmarc_reports').insert(report_record).execute()
-        db_report_id = result.data[0]['id']
-        logger.info(f"Stored report {report_data['report_id']} with ID {db_report_id}")
+        # Use UPSERT with ON CONFLICT to handle duplicates gracefully
+        # First try to insert, if conflict occurs, return the existing record
+        try:
+            result = supabase.table('dmarc_reports').insert(report_record).execute()
+            db_report_id = result.data[0]['id']
+            logger.info(f"Stored new report {report_data['report_id']} with ID {db_report_id}")
+            is_new_report = True
+            
+        except Exception as insert_error:
+            # Check if this is a duplicate key constraint violation
+            error_str = str(insert_error)
+            if '23505' in error_str or 'duplicate key' in error_str.lower():
+                # Duplicate detected - fetch the existing record
+                logger.info(f"Report {report_data['report_id']} from {report_data['org_name']} already exists, fetching existing record")
+                existing = supabase.table('dmarc_reports').select('id').eq('user_id', user_id).eq('report_id', report_data['report_id']).eq('org_name', report_data['org_name']).eq('domain', report_data['domain']).execute()
+                
+                if existing.data:
+                    db_report_id = existing.data[0]['id']
+                    is_new_report = False
+                    logger.info(f"Using existing report ID {db_report_id} for {report_data['report_id']}")
+                else:
+                    # This shouldn't happen but handle it gracefully
+                    logger.error(f"Duplicate key error but could not find existing record for {report_data['report_id']}")
+                    raise insert_error
+            else:
+                # Not a duplicate key error, re-raise
+                raise insert_error
         
-        # Store individual records in batches for better performance
-        records_to_insert = []
-        for record in report_data['records']:
-            record_data = {
-                'report_id': db_report_id,
-                'source_ip': record['source_ip'],
-                'count': record['count'],
-                'disposition': record['disposition'],
-                'dkim_result': record['dkim_result'],
-                'spf_result': record['spf_result'],
-                'dkim_domain': record.get('dkim_domain'),
-                'dkim_selector': record.get('dkim_selector'),
-                'spf_domain': record.get('spf_domain'),
-                'header_from': record.get('header_from'),
-                'envelope_from': record.get('envelope_from'),
-                'envelope_to': record.get('envelope_to')
-            }
-            records_to_insert.append(record_data)
+        # Only insert records if this is a new report to avoid duplicate records
+        if is_new_report:
+            # Store individual records in batches for better performance
+            records_to_insert = []
+            for record in report_data['records']:
+                record_data = {
+                    'report_id': db_report_id,
+                    'source_ip': record['source_ip'],
+                    'count': record['count'],
+                    'disposition': record['disposition'],
+                    'dkim_result': record['dkim_result'],
+                    'spf_result': record['spf_result'],
+                    'dkim_domain': record.get('dkim_domain'),
+                    'dkim_selector': record.get('dkim_selector'),
+                    'spf_domain': record.get('spf_domain'),
+                    'header_from': record.get('header_from'),
+                    'envelope_from': record.get('envelope_from'),
+                    'envelope_to': record.get('envelope_to')
+                }
+                records_to_insert.append(record_data)
+            
+            # Batch insert records (Supabase handles up to 1000 records per batch)
+            if records_to_insert:
+                batch_size = 1000
+                for i in range(0, len(records_to_insert), batch_size):
+                    batch = records_to_insert[i:i + batch_size]
+                    supabase.table('dmarc_records').insert(batch).execute()
+                
+                logger.info(f"Stored {len(report_data['records'])} records for report {db_report_id}")
+        else:
+            logger.info(f"Skipped storing records for existing report {db_report_id}")
         
-        # Batch insert records (Supabase handles up to 1000 records per batch)
-        batch_size = 1000
-        for i in range(0, len(records_to_insert), batch_size):
-            batch = records_to_insert[i:i + batch_size]
-            supabase.table('dmarc_records').insert(batch).execute()
-        
-        logger.info(f"Stored {len(report_data['records'])} records for report {db_report_id}")
-        return db_report_id
+        return (db_report_id, is_new_report)
         
     except Exception as e:
-        logger.error(f"Failed to store report: {e}")
-        # Store error in report
-        error_record = {
-            'user_id': user_id,
-            'imap_config_id': imap_config_id,
-            'org_name': report_data.get('org_name', 'Unknown'),
-            'report_id': report_data.get('report_id', 'Unknown'),
-            'domain': report_data.get('domain', 'Unknown'),
-            'status': 'error',
-            'error_message': str(e)
-        }
-        try:
-            supabase.table('dmarc_reports').insert(error_record).execute()
-        except:
-            pass  # Don't fail if we can't log the error
+        # For non-duplicate errors, log and re-raise without creating error records
+        logger.error(f"Failed to store report {report_data.get('report_id', 'Unknown')}: {e}")
         raise
 
 def mark_email_as_read(client, uid):
@@ -356,25 +369,36 @@ def process_dmarc_ingestion(user_id: str, imap_config: Dict[str, Any], max_retri
                 report_data = parse_dmarc_xml(xml_data)
                 
                 # Store in database
-                report_id = store_dmarc_report(supabase, user_id, imap_config['id'], report_data)
+                report_id, is_new_report = store_dmarc_report(supabase, user_id, imap_config['id'], report_data)
                 
                 # Mark email as read only after successful processing
                 mark_email_as_read(client, uid)
                 
+                # Track new vs duplicate reports
+                if is_new_report:
+                    results['processed'] += 1
+                    action = 'dmarc_report_processed'
+                    logger.info(f"Successfully processed new report {report_data['report_id']}")
+                else:
+                    results['duplicates'] += 1
+                    action = 'dmarc_report_duplicate'
+                    logger.info(f"Skipped duplicate report {report_data['report_id']}")
+                
                 # Log success
-                log_audit_event(supabase, user_id, 'dmarc_report_processed', 'dmarc_report', report_id, {
+                log_audit_event(supabase, user_id, action, 'dmarc_report', report_id, {
                     'subject': subject,
                     'filename': filename,
                     'org_name': report_data['org_name'],
-                    'domain': report_data['domain']
+                    'domain': report_data['domain'],
+                    'is_duplicate': not is_new_report
                 })
                 
-                results['processed'] += 1
                 results['reports'].append({
                     'id': report_id,
                     'org_name': report_data['org_name'],
                     'domain': report_data['domain'],
-                    'total_records': report_data['total_records']
+                    'total_records': report_data['total_records'],
+                    'is_new': is_new_report
                 })
                 
             except ValueError as e:
@@ -405,6 +429,7 @@ def process_dmarc_ingestion(user_id: str, imap_config: Dict[str, Any], max_retri
         # Log overall processing stats
         log_audit_event(supabase, user_id, 'dmarc_ingestion_completed', 'imap_config', imap_config['id'], {
             'processed': results['processed'],
+            'duplicates': results['duplicates'],
             'errors': results['errors'],
             'total_emails': len(dmarc_emails)
         })
