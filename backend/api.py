@@ -449,6 +449,180 @@ async def get_rate_limit_status(user = Depends(get_current_user)):
         logger.error(f"Error fetching rate limit status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Admin endpoints for report management
+@app.get("/api/v1/admin/reports/failed")
+async def get_failed_reports(admin_user = Depends(require_admin)):
+    """Get all failed reports (admin only)"""
+    try:
+        supabase = get_supabase_client(use_service_role=True)
+        
+        # Get reports with error status or error messages
+        result = supabase.table('dmarc_reports').select(
+            'id,user_id,org_name,domain,report_id,status,error_message,created_at,profiles(email)'
+        ).or_(
+            'status.eq.error,status.eq.failed,error_message.not.is.null'
+        ).order('created_at', desc=True).execute()
+        
+        return {
+            "failed_reports": result.data,
+            "count": len(result.data)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching failed reports: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/v1/admin/reports/{report_id}")
+async def delete_report(report_id: str, admin_user = Depends(require_admin)):
+    """Delete a specific report and its records (admin only)"""
+    try:
+        supabase = get_supabase_client(use_service_role=True)
+        
+        # First check if report exists
+        report_result = supabase.table('dmarc_reports').select('id,user_id,org_name,domain,report_id').eq('id', report_id).execute()
+        if not report_result.data:
+            raise HTTPException(status_code=404, detail="Report not found")
+        
+        report = report_result.data[0]
+        
+        # Delete associated records first (due to foreign key constraints)
+        records_result = supabase.table('dmarc_records').delete().eq('report_id', report_id).execute()
+        
+        # Delete the report
+        report_delete_result = supabase.table('dmarc_reports').delete().eq('id', report_id).execute()
+        
+        # Log admin action
+        log_audit_event(
+            supabase,
+            admin_user['id'],
+            'report_deleted',
+            'dmarc_report',
+            report_id,
+            {
+                'admin_user': admin_user['id'],
+                'report_id': report['report_id'],
+                'domain': report['domain'],
+                'org_name': report['org_name'],
+                'deleted_records_count': len(records_result.data) if records_result.data else 0
+            }
+        )
+        
+        logger.info(f"Admin {admin_user['email']} deleted report {report_id} (external ID: {report['report_id']})")
+        
+        return {
+            "message": f"Report {report_id} deleted successfully",
+            "report_id": report_id,
+            "external_report_id": report['report_id'],
+            "deleted_records": len(records_result.data) if records_result.data else 0
+        }
+    except Exception as e:
+        logger.error(f"Error deleting report {report_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/v1/admin/reports/failed/cleanup")
+async def cleanup_failed_reports(admin_user = Depends(require_admin)):
+    """Delete all failed reports (admin only)"""
+    try:
+        supabase = get_supabase_client(use_service_role=True)
+        
+        # Get all failed reports
+        failed_reports_result = supabase.table('dmarc_reports').select(
+            'id,user_id,org_name,domain,report_id'
+        ).or_(
+            'status.eq.error,status.eq.failed,error_message.not.is.null'
+        ).execute()
+        
+        if not failed_reports_result.data:
+            return {
+                "message": "No failed reports found",
+                "deleted_count": 0
+            }
+        
+        failed_report_ids = [report['id'] for report in failed_reports_result.data]
+        
+        # Delete associated records first
+        total_records_deleted = 0
+        for report_id in failed_report_ids:
+            records_result = supabase.table('dmarc_records').delete().eq('report_id', report_id).execute()
+            total_records_deleted += len(records_result.data) if records_result.data else 0
+        
+        # Delete all failed reports
+        reports_delete_result = supabase.table('dmarc_reports').delete().in_('id', failed_report_ids).execute()
+        
+        # Log admin action
+        log_audit_event(
+            supabase,
+            admin_user['id'],
+            'failed_reports_cleanup',
+            'bulk_operation',
+            None,
+            {
+                'admin_user': admin_user['id'],
+                'deleted_reports_count': len(failed_reports_result.data),
+                'deleted_records_count': total_records_deleted,
+                'report_ids': failed_report_ids[:10]  # Log first 10 IDs to avoid huge logs
+            }
+        )
+        
+        logger.info(f"Admin {admin_user['email']} cleaned up {len(failed_reports_result.data)} failed reports")
+        
+        return {
+            "message": f"Cleaned up {len(failed_reports_result.data)} failed reports",
+            "deleted_reports": len(failed_reports_result.data),
+            "deleted_records": total_records_deleted
+        }
+    except Exception as e:
+        logger.error(f"Error cleaning up failed reports: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/v1/admin/reports/by-external-id/{external_report_id}")
+async def delete_report_by_external_id(external_report_id: str, admin_user = Depends(require_admin)):
+    """Delete a report by its external report ID (admin only)"""
+    try:
+        supabase = get_supabase_client(use_service_role=True)
+        
+        # Find report by external report_id
+        report_result = supabase.table('dmarc_reports').select('id,user_id,org_name,domain,report_id').eq('report_id', external_report_id).execute()
+        if not report_result.data:
+            raise HTTPException(status_code=404, detail=f"Report with external ID {external_report_id} not found")
+        
+        report = report_result.data[0]
+        report_id = report['id']
+        
+        # Delete associated records first
+        records_result = supabase.table('dmarc_records').delete().eq('report_id', report_id).execute()
+        
+        # Delete the report
+        report_delete_result = supabase.table('dmarc_reports').delete().eq('id', report_id).execute()
+        
+        # Log admin action
+        log_audit_event(
+            supabase,
+            admin_user['id'],
+            'report_deleted_by_external_id',
+            'dmarc_report',
+            report_id,
+            {
+                'admin_user': admin_user['id'],
+                'external_report_id': external_report_id,
+                'internal_report_id': report_id,
+                'domain': report['domain'],
+                'org_name': report['org_name'],
+                'deleted_records_count': len(records_result.data) if records_result.data else 0
+            }
+        )
+        
+        logger.info(f"Admin {admin_user['email']} deleted report by external ID {external_report_id} (internal ID: {report_id})")
+        
+        return {
+            "message": f"Report with external ID {external_report_id} deleted successfully",
+            "internal_report_id": report_id,
+            "external_report_id": external_report_id,
+            "deleted_records": len(records_result.data) if records_result.data else 0
+        }
+    except Exception as e:
+        logger.error(f"Error deleting report by external ID {external_report_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v1/admin/rate-limits/global")
 async def get_global_rate_limits(user = Depends(require_admin)):
     """Get global rate limiting statistics (admin only)"""
