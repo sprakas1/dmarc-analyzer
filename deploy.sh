@@ -80,8 +80,22 @@ zero_downtime_deploy() {
     check_health "frontend" "http://localhost:3000/api/health"
     
     # Deploy scheduler (non-critical, can have brief downtime)
-    log "Deploying scheduler..."
-    docker-compose up -d --no-deps scheduler
+    #
+    # docker-compose 1.29.2 has a known bug that raises a KeyError ('ContainerConfig')
+    # when recreating a service whose previous image was built with BuildKit. The
+    # quickest and safest workaround is to remove the old container explicitly
+    # before issuing the `up` command so docker-compose does not attempt to copy
+    # volume definitions from it (the code path that triggers the bug).
+    # See: https://github.com/docker/compose/issues/8659
+    log "Deploying scheduler (clean recreation to avoid ContainerConfig bug)..."
+    # Remove the old container if it exists so that the subsequent `up` does not
+    # try to introspect it. Ignore failures to keep the script idempotent.
+    docker-compose rm -fs scheduler || true
+
+    # Now recreate the scheduler service from a fresh image. `--force-recreate`
+    # guarantees we do not reuse the buggy container state, and `--build`
+    # ensures we are using the image we just built in the earlier step.
+    docker-compose up -d --no-deps --build --force-recreate scheduler
     
     # Clean up old images
     log "Cleaning up old images..."
