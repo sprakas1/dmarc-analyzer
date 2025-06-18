@@ -63,39 +63,35 @@ zero_downtime_deploy() {
     
     # Build new images
     log "Building new images..."
-    docker-compose build --parallel
+    docker compose build --parallel
     
     # Deploy backend first (since frontend depends on it)
     log "Deploying backend with zero downtime..."
-    docker-compose up -d --no-deps --wait backend
+    docker compose up -d --no-deps --wait backend
     
     # Check backend health
     check_health "backend" "http://localhost:8000/health"
     
     # Deploy frontend with enhanced UI
     log "Deploying frontend with enhanced UI components..."
-    docker-compose up -d --no-deps --wait frontend
+    docker compose up -d --no-deps --wait frontend
     
     # Check frontend health
     check_health "frontend" "http://localhost:3000/api/health"
     
     # Deploy scheduler (non-critical, can have brief downtime)
     #
-    # docker-compose 1.29.2 has a known bug that raises a KeyError ('ContainerConfig')
-    # when recreating a service whose previous image was built with BuildKit. The
-    # quickest and safest workaround is to remove the old container explicitly
-    # before issuing the `up` command so docker-compose does not attempt to copy
-    # volume definitions from it (the code path that triggers the bug).
-    # See: https://github.com/docker/compose/issues/8659
-    log "Deploying scheduler (clean recreation to avoid ContainerConfig bug)..."
+    # Docker Compose v2 handles container recreation more gracefully
+    # but we still clean up to ensure fresh deployment
+    log "Deploying scheduler (clean recreation)..."
     # Remove the old container if it exists so that the subsequent `up` does not
     # try to introspect it. Ignore failures to keep the script idempotent.
-    docker-compose rm -fs scheduler || true
+    docker compose rm -fs scheduler || true
 
     # Now recreate the scheduler service from a fresh image. `--force-recreate`
-    # guarantees we do not reuse the buggy container state, and `--build`
+    # guarantees we do not reuse any cached container state, and `--build`
     # ensures we are using the image we just built in the earlier step.
-    docker-compose up -d --no-deps --build --force-recreate scheduler
+    docker compose up -d --no-deps --build --force-recreate scheduler
     
     # Clean up old images
     log "Cleaning up old images..."
@@ -139,20 +135,20 @@ fi
 case "${1:-start}" in
     start)
         log "Starting DMARC Analyzer services..."
-        docker-compose up -d --wait
+        docker compose up -d --wait
         check_all_health
         log "Services started successfully."
         ;;
     stop)
         log "Stopping services..."
-        docker-compose down
+        docker compose down
         log "Services stopped."
         ;;
     restart)
         warn "This will cause downtime. Use 'deploy' for zero-downtime updates."
         log "Restarting services..."
-        docker-compose down
-        docker-compose up -d --wait
+        docker compose down
+        docker compose up -d --wait
         check_all_health
         log "Services restarted."
         ;;
@@ -161,17 +157,17 @@ case "${1:-start}" in
         ;;
     status)
         log "Service status:"
-        docker-compose ps
+        docker compose ps
         echo ""
         log "Health status:"
         check_all_health
         ;;
     logs)
-        docker-compose logs -f
+        docker compose logs -f
         ;;
     build)
         log "Rebuilding images..."
-        docker-compose build --no-cache --parallel
+        docker compose build --no-cache --parallel
         log "Images rebuilt."
         ;;
     health)
