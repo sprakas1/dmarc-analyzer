@@ -56,6 +56,11 @@ check_health() {
 zero_downtime_deploy() {
     log "Starting zero-downtime deployment..."
     
+    # Check for frontend UI changes
+    if [ -f "frontend/src/components/ReportsEnhanced.tsx" ]; then
+        info "Detected Shadcn/UI enhanced components - ensuring dependencies are installed..."
+    fi
+    
     # Build new images
     log "Building new images..."
     docker-compose build --parallel
@@ -67,8 +72,8 @@ zero_downtime_deploy() {
     # Check backend health
     check_health "backend" "http://localhost:8000/health"
     
-    # Deploy frontend
-    log "Deploying frontend with zero downtime..."
+    # Deploy frontend with enhanced UI
+    log "Deploying frontend with enhanced UI components..."
     docker-compose up -d --no-deps --wait frontend
     
     # Check frontend health
@@ -84,6 +89,7 @@ zero_downtime_deploy() {
     
     log "Zero-downtime deployment completed successfully!"
     log "All services are healthy and running."
+    log "Enhanced Reports UI with Shadcn/UI is now live!"
 }
 
 check_all_health() {

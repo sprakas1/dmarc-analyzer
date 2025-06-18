@@ -6,8 +6,9 @@ A comprehensive DMARC report analyzer with intelligent AI-powered analysis, auto
 
 ### Core Functionality
 - **IMAP Integration:** Automated polling and parsing of DMARC reports
+- **Enhanced Reports UI:** Modern SaaS design with advanced search and filtering ✨ **NEW**
 - **Real-time Dashboard:** Health scores, trend analysis, and failure detection
-- **Data Export:** CSV, JSON, and PDF report generation
+- **Data Export:** CSV, JSON, and PDF report generation with filtering ✨ **ENHANCED**
 - **Secure Authentication:** Supabase-powered user management
 
 ### AI Analysis Engine
@@ -27,7 +28,8 @@ A comprehensive DMARC report analyzer with intelligent AI-powered analysis, auto
 
 - **Backend:** Python (IMAP polling, XML parsing, AI analysis)
 - **Database:** Supabase (managed Postgres with built-in auth)
-- **Frontend:** React/TypeScript with modern UI components
+- **Frontend:** Next.js 14 + TypeScript with Shadcn/UI components ✨ **NEW**
+- **UI Library:** Shadcn/UI with Radix primitives and Tailwind CSS ✨ **NEW**
 - **Testing:** Playwright MCP for automated browser testing
 - **AI Analysis:** Pattern detection and recommendation engine
 
@@ -44,26 +46,68 @@ A comprehensive DMARC report analyzer with intelligent AI-powered analysis, auto
    ```bash
    git clone <repository-url>
    cd dmarc-analyzer
-   npm install
-   pip install -r requirements.txt
+   
+   # Install frontend dependencies (includes Shadcn/UI)
+   cd frontend && npm install
+   
+   # Install backend dependencies
+   cd ../backend && pip install -r requirements.txt
    ```
 
-2. **Configure MCP Integration:**
+2. **Start Development Servers:**
+   ```bash
+   # Frontend (with enhanced UI)
+   cd frontend && npm run dev
+   
+   # Backend
+   cd backend && python main.py
+   ```
+
+3. **Configure MCP Integration:**
    - Restart Cursor to load MCP servers
    - Verify setup: `Cursor Settings` → `Features` → `MCP`
 
-3. **Quick Test:**
+4. **Quick Test:**
    ```
-   "Take a screenshot of localhost:3000 to verify setup"
+   "Take a screenshot of localhost:3000 to verify enhanced Reports UI"
+   "Test the new search and filter functionality in Reports"
    "List all my Supabase projects"
    ```
+
+## ✨ Enhanced UI Features (NEW)
+
+### Modern SaaS Design with Shadcn/UI
+- **Professional Components:** Cards, badges, buttons with consistent design system
+- **Advanced Search:** Real-time search across organization, domain, and report ID
+- **Smart Filtering:** Status-based filtering (pass/fail) + domain-specific filters
+- **Interactive Statistics:** Live stats cards with icons and color-coded indicators
+- **Enhanced Data Table:** Better typography, hover effects, and responsive design
+- **CSV Export:** Export filtered data with comprehensive report information
+- **Loading States:** Smooth skeleton loading animations
+- **Responsive Design:** Optimized for mobile and desktop viewing
+
+### UI Components Available
+- **Table, Button, Badge, Dialog, Input, Select, Card, Separator**
+- **Tooltip, Progress** - For enhanced user interactions
+- **Full customization** - All components copied to codebase for complete control
+- **CSS Variables** - Easy theming and brand customization
+
+### Customization Options
+```css
+/* Easy brand customization in globals.css */
+:root {
+  --primary: 220 90% 56%;     /* Your brand color */
+  --destructive: 0 84% 60%;   /* Error states */
+  --radius: 0.5rem;          /* Border radius */
+}
+```
 
 ## 📚 Documentation
 
 ### Core Architecture
 - [`dmarc-analyzer.mdc`](.cursor/rules/dmarc-analyzer.mdc) - Project overview and AI analysis features
 - [`backend.mdc`](.cursor/rules/backend.mdc) - Python backend implementation details
-- [`frontend.mdc`](.cursor/rules/frontend.mdc) - React UI components and user experience
+- [`frontend.mdc`](.cursor/rules/frontend.mdc) - Enhanced UI components and Shadcn/UI integration ✨ **UPDATED**
 
 ### Development & Testing
 - [`testing-playwright.mdc`](.cursor/rules/testing-playwright.mdc) - Comprehensive testing scenarios
@@ -81,6 +125,11 @@ A comprehensive DMARC report analyzer with intelligent AI-powered analysis, auto
 # Quick functionality check
 "Test the complete DMARC setup flow from login to viewing first report"
 
+# Enhanced UI validation ✨ NEW
+"Test the new Reports component with search and filtering functionality"
+"Verify Shadcn/UI components render correctly across different screen sizes"
+"Test CSV export functionality with filtered data"
+
 # UI validation
 "Test all dashboard widgets and verify they display correctly"
 
@@ -88,7 +137,7 @@ A comprehensive DMARC report analyzer with intelligent AI-powered analysis, auto
 "Test IMAP credential form with both valid and invalid inputs"
 
 # Performance testing
-"Test dashboard loading performance with large datasets"
+"Test dashboard loading performance with large datasets and new UI components"
 ```
 
 ### Advanced Testing

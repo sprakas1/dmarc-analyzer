@@ -239,9 +239,15 @@ def store_dmarc_report(supabase, user_id: str, imap_config_id: str, report_data:
             # Check if this is a duplicate key constraint violation
             error_str = str(insert_error)
             if '23505' in error_str or 'duplicate key' in error_str.lower():
-                # Duplicate detected - fetch the existing record
+                # Duplicate detected - fetch the existing record (must match unique constraint fields)
                 logger.info(f"Report {report_data['report_id']} from {report_data['org_name']} already exists, fetching existing record")
-                existing = supabase.table('dmarc_reports').select('id').eq('user_id', user_id).eq('report_id', report_data['report_id']).eq('org_name', report_data['org_name']).eq('domain', report_data['domain']).execute()
+                existing = supabase.table('dmarc_reports').select('id')\
+                    .eq('user_id', user_id)\
+                    .eq('report_id', report_data['report_id'])\
+                    .eq('org_name', report_data['org_name'])\
+                    .eq('domain', report_data['domain'])\
+                    .eq('date_range_begin', report_data['date_range_begin'].isoformat() if report_data['date_range_begin'] else None)\
+                    .execute()
                 
                 if existing.data:
                     db_report_id = existing.data[0]['id']

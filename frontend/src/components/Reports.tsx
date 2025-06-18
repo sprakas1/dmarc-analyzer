@@ -251,10 +251,17 @@ export default function Reports({ session }: ReportsProps) {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {currentReports.map((report) => (
                           <tr key={report.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {report.date_range_begin 
-                                ? new Date(report.date_range_begin).toLocaleDateString() 
-                                : new Date(report.created_at).toLocaleDateString()}
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900" title={`Received on ${new Date(report.created_at).toLocaleString()}`}>
+                              <div>
+                                <div>
+                                  {report.date_range_begin 
+                                    ? new Date(report.date_range_begin).toLocaleDateString() 
+                                    : new Date(report.created_at).toLocaleDateString()}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  Received {new Date(report.created_at).toLocaleDateString()}
+                                </div>
+                              </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                               {report.org_name}

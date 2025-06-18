@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import Navigation from './Navigation'
 import Overview from './Overview'
 import Reports from './Reports'
+import ReportsEnhanced from './ReportsEnhanced'
 import Analytics from './Analytics'
 import Settings from './Settings'
 
@@ -35,7 +36,7 @@ export default function Dashboard() {
       case 'overview':
         return <Overview session={session} setActiveTab={setActiveTab} />
       case 'reports':
-        return <Reports session={session} />
+        return <ReportsEnhanced session={session} />
       case 'analytics':
         return <Analytics session={session} />
       case 'settings':
