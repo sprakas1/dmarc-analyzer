@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uvicorn
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import uuid
 import os
@@ -18,6 +18,9 @@ from dmarc_parser import parse_dmarc_xml
 from dmarc_ingest import store_dmarc_report, connect_imap, log_audit_event
 from auth import get_current_user, get_optional_user, require_admin
 from scheduler import trigger_manual_processing, scheduler, start_background_scheduler
+from analysis_engine import DMARCAnalyzer
+from recommendation_engine import RecommendationEngine
+from dmarc_failure_analyzer import DMARCFailureAnalyzer
 
 app = FastAPI(
     title="DMARC Analyzer API",
@@ -666,6 +669,246 @@ async def reset_user_rate_limits(user_id: str, admin_user = Depends(require_admi
     except Exception as e:
         logger.error(f"Error resetting user rate limits: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# AI Analysis endpoints
+@app.post("/api/v1/analysis/analyze/{domain}")
+async def analyze_domain(domain: str, user = Depends(get_current_user)):
+    """Trigger AI analysis for a domain"""
+    try:
+        supabase = get_supabase_client(user.get('access_token'))
+        
+        # Initialize AI components
+        analyzer = DMARCAnalyzer(supabase)
+        recommendation_engine = RecommendationEngine(supabase)
+        
+        # Perform analysis
+        analysis_result = analyzer.analyze_domain_reports(user['id'], domain)
+        
+        # Store analysis result in database
+        stored_result = supabase.table('analysis_results').insert({
+            'user_id': user['id'],
+            'domain': analysis_result.domain,
+            'health_score': analysis_result.health_score,
+            'failure_rate': analysis_result.failure_rate,
+            'anomalies_detected': analysis_result.anomalies_detected,
+            'recommendations_count': analysis_result.recommendations_count,
+            'status': analysis_result.status
+        }).execute()
+        
+        if not stored_result.data:
+            raise HTTPException(status_code=500, detail="Failed to store analysis result")
+        
+        # Generate recommendations
+        recommendations = recommendation_engine.generate_recommendations(analysis_result, user['id'])
+        
+        return {
+            "analysis": {
+                "id": stored_result.data[0]['id'],
+                "domain": analysis_result.domain,
+                "health_score": analysis_result.health_score,
+                "failure_rate": analysis_result.failure_rate,
+                "anomalies_detected": analysis_result.anomalies_detected,
+                "status": analysis_result.status,
+                "issues": analysis_result.issues
+            },
+            "recommendations": recommendations,
+            "message": f"Analysis completed for {domain}"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing domain {domain}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+@app.get("/api/v1/analysis/results/{domain}")
+async def get_analysis_results(domain: str, user = Depends(get_current_user)):
+    """Get latest analysis results for a domain"""
+    try:
+        supabase = get_supabase_client(user.get('access_token'))
+        
+        # Get latest analysis result
+        result = supabase.table('analysis_results').select('*').eq(
+            'user_id', user['id']
+        ).eq('domain', domain).order('created_at', desc=True).limit(1).execute()
+        
+        if not result.data:
+            return {"analysis": None, "message": "No analysis found for this domain"}
+        
+        analysis = result.data[0]
+        
+        # Get recommendations for this analysis
+        recommendations = supabase.table('recommendations').select('*').eq(
+            'analysis_result_id', analysis['id']
+        ).order('priority', desc=True).execute()
+        
+        return {
+            "analysis": analysis,
+            "recommendations": recommendations.data if recommendations.data else []
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting analysis results: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/recommendations")
+async def get_recommendations(domain: str = None, status: str = None, user = Depends(get_current_user)):
+    """Get recommendations for user, optionally filtered by domain and status"""
+    try:
+        supabase = get_supabase_client(user.get('access_token'))
+        recommendation_engine = RecommendationEngine(supabase)
+        
+        recommendations = recommendation_engine.get_user_recommendations(
+            user['id'], domain, status
+        )
+        
+        return {"recommendations": recommendations}
+        
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/v1/recommendations/{recommendation_id}/status")
+async def update_recommendation_status(
+    recommendation_id: str, 
+    status: str, 
+    user_action: str = "none",
+    user = Depends(get_current_user)
+):
+    """Update recommendation status and user action"""
+    try:
+        supabase = get_supabase_client(user.get('access_token'))
+        recommendation_engine = RecommendationEngine(supabase)
+        
+        # Validate status
+        valid_statuses = ['pending', 'in_progress', 'completed', 'dismissed', 'failed']
+        if status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+        
+        # Validate user_action
+        valid_actions = ['none', 'acknowledged', 'implementing', 'completed', 'dismissed']
+        if user_action not in valid_actions:
+            raise HTTPException(status_code=400, detail=f"Invalid user_action. Must be one of: {valid_actions}")
+        
+        success = recommendation_engine.update_recommendation_status(
+            recommendation_id, status, user_action
+        )
+        
+        if success:
+            return {"message": "Recommendation status updated successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Recommendation not found or update failed")
+        
+    except Exception as e:
+        logger.error(f"Error updating recommendation status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/analysis/health-score/{domain}")
+async def get_domain_health_score(domain: str, user = Depends(get_current_user)):
+    """Get current health score for a domain"""
+    try:
+        supabase = get_supabase_client(user.get('access_token'))
+        
+        # Get latest health score
+        result = supabase.table('health_scores').select('*').eq(
+            'user_id', user['id']
+        ).eq('domain', domain).order('score_date', desc=True).limit(1).execute()
+        
+        if not result.data:
+            return {"health_score": None, "message": "No health score available"}
+        
+        health_data = result.data[0]
+        
+        return {
+            "health_score": {
+                "overall_score": health_data['overall_score'],
+                "spf_score": health_data['spf_score'],
+                "dkim_score": health_data['dkim_score'],
+                "dmarc_score": health_data['dmarc_score'],
+                "trend_direction": health_data['trend_direction'],
+                "score_date": health_data['score_date']
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting health score: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/analysis/quick-analyze")
+async def quick_analyze_report(
+    domain: str,
+    report_data: List[Dict[str, Any]],
+    user = Depends(get_current_user)
+):
+    """Quick analysis of DMARC report data"""
+    try:
+        analyzer = DMARCFailureAnalyzer()
+        analysis = analyzer.analyze_report_data(domain, report_data)
+        
+        return {
+            "domain": analysis['domain'],
+            "total_records": analysis['total_records'],
+            "current_spf": analysis['current_spf'],
+            "failures": analysis['failures'],
+            "spf_issues": analysis['spf_issues'],
+            "recommendations": analysis['recommendations']
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in quick analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+@app.post("/api/v1/analysis/analyze-from-records/{domain}")
+async def analyze_from_existing_records(domain: str, user = Depends(get_current_user)):
+    """Analyze existing DMARC records in database"""
+    try:
+        supabase = get_supabase_client(user.get('access_token'))
+        
+        # Get recent DMARC records for this domain
+        cutoff_date = (datetime.now() - timedelta(days=7)).isoformat()
+        
+        reports_result = supabase.table('dmarc_reports').select('id').eq(
+            'user_id', user['id']
+        ).eq('domain', domain).gte('created_at', cutoff_date).execute()
+        
+        if not reports_result.data:
+            return {"message": "No recent DMARC reports found for analysis"}
+        
+        report_ids = [r['id'] for r in reports_result.data]
+        records_result = supabase.table('dmarc_records').select('*').in_(
+            'dmarc_report_id', report_ids
+        ).execute()
+        
+        if not records_result.data:
+            return {"message": "No DMARC records found"}
+        
+        # Convert database records to analysis format
+        report_data = []
+        for record in records_result.data:
+            report_data.append({
+                'source_ip': record.get('source_ip'),
+                'count': record.get('count', 1),
+                'spf_result': record.get('spf_result'),
+                'dkim_result': record.get('dkim_result'),
+                'disposition': record.get('disposition')
+            })
+        
+        # Run analysis
+        analyzer = DMARCFailureAnalyzer()
+        analysis = analyzer.analyze_report_data(domain, report_data)
+        
+        return {
+            "domain": analysis['domain'],
+            "total_records": analysis['total_records'],
+            "current_spf": analysis['current_spf'],
+            "failures": analysis['failures'],
+            "spf_issues": analysis['spf_issues'],
+            "dkim_issues": analysis['dkim_issues'],
+            "recommendations": analysis['recommendations'],
+            "analysis_date": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing existing records: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 if __name__ == "__main__":
     import os

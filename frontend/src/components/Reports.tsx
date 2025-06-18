@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, XMarkIcon } from '@heroicons/react/20/solid'
 import { DocumentTextIcon, ExclamationTriangleIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
 import { api, handleApiError, type DMARCReport } from '@/lib/api'
+import AIAnalysis from './AIAnalysis'
 
 interface ReportsProps {
   session: any
@@ -48,6 +49,7 @@ export default function Reports({ session }: ReportsProps) {
   const [filter, setFilter] = useState<'all' | 'pass' | 'fail'>('all')
   const [selectedReport, setSelectedReport] = useState<DetailedReport | null>(null)
   const [detailsLoading, setDetailsLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<'reports' | 'analysis'>('reports')
   const itemsPerPage = 10
 
   useEffect(() => {
@@ -185,161 +187,231 @@ export default function Reports({ session }: ReportsProps) {
             A list of all DMARC reports received for your domains.
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <select
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value as 'all' | 'pass' | 'fail')
-              setCurrentPage(1)
-            }}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-          >
-            <option value="all">All Reports</option>
-            <option value="pass">Mostly Passed</option>
-            <option value="fail">Mostly Failed</option>
-          </select>
-        </div>
       </div>
 
-      {reports.length === 0 ? (
-        <div className="text-center">
-          <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No reports yet</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Configure your IMAP connection to start receiving DMARC reports.
-          </p>
-        </div>
-      ) : (
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'reports'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            Reports
+          </button>
+          <button
+            onClick={() => setActiveTab('analysis')}
+            className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'analysis'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            AI Analysis
+          </button>
+        </nav>
+      </div>
+
+      {/* Reports Tab Content */}
+      {activeTab === 'reports' && (
         <>
-          <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="px-4 py-5 sm:p-6">
-              <div className="flow-root">
-                <div className="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-                  <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                    <table className="min-w-full divide-y divide-gray-300">
-                      <thead>
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Organization
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Domain
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Policy
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Total Records
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Passed
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Failed
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="relative px-6 py-3">
-                            <span className="sr-only">Actions</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {currentReports.map((report) => (
-                          <tr key={report.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900" title={`Received on ${new Date(report.created_at).toLocaleString()}`}>
-                              <div>
-                                <div>
-                                  {report.date_range_begin 
-                                    ? new Date(report.date_range_begin).toLocaleDateString() 
-                                    : new Date(report.created_at).toLocaleDateString()}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  Received {new Date(report.created_at).toLocaleDateString()}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {report.org_name}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {report.domain}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {report.domain_policy || 'none'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {report.total_records}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
-                              {report.pass_count}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
-                              {report.fail_count}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                {getStatusIcon(getOverallResult(report))}
-                                <span className="ml-2">
-                                  {getStatusBadge(getOverallResult(report))}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button
-                                className="text-blue-600 hover:text-blue-900"
-                                onClick={() => {
-                                  fetchReportDetails(report.id)
-                                }}
-                              >
-                                View Details
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
+          <div className="sm:flex sm:items-center">
+            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+              <select
+                value={filter}
+                onChange={(e) => {
+                  setFilter(e.target.value as 'all' | 'pass' | 'fail')
+                  setCurrentPage(1)
+                }}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+              >
+                <option value="all">All Reports</option>
+                <option value="pass">Mostly Passed</option>
+                <option value="fail">Mostly Failed</option>
+              </select>
             </div>
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <nav className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6" aria-label="Pagination">
-              <div className="hidden sm:block">
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
-                  <span className="font-medium">{Math.min(endIndex, sortedReports.length)}</span> of{' '}
-                  <span className="font-medium">{sortedReports.length}</span> results
-                </p>
+          {reports.length === 0 ? (
+            <div className="text-center">
+              <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No reports yet</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Configure your IMAP connection to start receiving DMARC reports.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-white shadow rounded-lg overflow-hidden">
+                <div className="px-4 py-5 sm:p-6">
+                  <div className="flow-root">
+                    <div className="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                      <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                        <table className="min-w-full divide-y divide-gray-300">
+                          <thead>
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Date
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Organization
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Domain
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Policy
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Total Records
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Passed
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Failed
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                              </th>
+                              <th className="relative px-6 py-3">
+                                <span className="sr-only">Actions</span>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {currentReports.map((report) => (
+                              <tr key={report.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900" title={`Received on ${new Date(report.created_at).toLocaleString()}`}>
+                                  <div>
+                                    <div>
+                                      {report.date_range_begin 
+                                        ? new Date(report.date_range_begin).toLocaleDateString() 
+                                        : new Date(report.created_at).toLocaleDateString()}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      Received {new Date(report.created_at).toLocaleDateString()}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {report.org_name}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {report.domain}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {report.domain_policy || 'none'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {report.total_records}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                                  {report.pass_count}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">
+                                  {report.fail_count}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    {getStatusIcon(getOverallResult(report))}
+                                    <span className="ml-2">
+                                      {getStatusBadge(getOverallResult(report))}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                  <button
+                                    className="text-blue-600 hover:text-blue-900"
+                                    onClick={() => {
+                                      fetchReportDetails(report.id)
+                                    }}
+                                  >
+                                    View Details
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 flex justify-between sm:justify-end">
-                <button
-                  onClick={() => setCurrentPage(page => Math.max(page - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ChevronLeftIcon className="h-5 w-5 mr-1" aria-hidden="true" />
-                  Previous
-                </button>
-                <button
-                  onClick={() => setCurrentPage(page => Math.min(page + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                  <ChevronRightIcon className="h-5 w-5 ml-1" aria-hidden="true" />
-                </button>
-              </div>
-            </nav>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <nav className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6" aria-label="Pagination">
+                  <div className="hidden sm:block">
+                    <p className="text-sm text-gray-700">
+                      Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
+                      <span className="font-medium">{Math.min(endIndex, sortedReports.length)}</span> of{' '}
+                      <span className="font-medium">{sortedReports.length}</span> results
+                    </p>
+                  </div>
+                  <div className="flex-1 flex justify-between sm:justify-end">
+                    <button
+                      onClick={() => setCurrentPage(page => Math.max(page - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeftIcon className="h-5 w-5 mr-1" aria-hidden="true" />
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(page => Math.min(page + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                      <ChevronRightIcon className="h-5 w-5 ml-1" aria-hidden="true" />
+                    </button>
+                  </div>
+                </nav>
+              )}
+            </>
           )}
         </>
+      )}
+
+      {/* AI Analysis Tab Content */}
+      {activeTab === 'analysis' && (
+        <div className="space-y-4">
+          {reports.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-500">No DMARC reports available for analysis.</p>
+              <p className="text-sm text-gray-400 mt-2">Upload some DMARC reports first to get AI-powered insights.</p>
+            </div>
+          ) : (
+            <>
+              {/* Domain Selector */}
+              <div className="bg-blue-50 rounded-lg p-4">
+                <h3 className="text-lg font-medium text-blue-900 mb-2">Select Domain for Analysis</h3>
+                <p className="text-sm text-blue-700 mb-3">Choose a domain to get AI-powered insights and recommendations</p>
+                <div className="flex flex-wrap gap-2">
+                  {[...new Set(reports.map(r => r.domain))].map(domain => (
+                    <button
+                      key={domain}
+                      onClick={() => setActiveTab('analysis')}
+                      className="px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {domain}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <AIAnalysis 
+                domain={[...new Set(reports.map(r => r.domain))][0]} 
+                session={session} 
+              />
+            </>
+          )}
+        </div>
       )}
 
       {selectedReport && (
